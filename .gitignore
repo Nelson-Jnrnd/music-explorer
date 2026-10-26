@@ -14,3 +14,15 @@ venv/
 dist/
 coverage/
 .pytest_cache/
+
+
+node_modules/
+dist/
+playwright-report/
+test-results/
+.env*
+!.env.example
+private-data/
+exploration*.json
+*.csv
+*.tsbuildinfo
