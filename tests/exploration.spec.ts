@@ -388,3 +388,53 @@ test("real client mock confirms artwork and blocks mismatched or unknown playbac
     ),
   ).toBe(0);
 });
+
+test("configured Spotify sign-in redirects with PKCE without asking for a client ID", async ({
+  page,
+}) => {
+  await page.addInitScript(() =>
+    sessionStorage.setItem(
+      "music-explorer.client-id",
+      "obsolete-manual-client",
+    ),
+  );
+  await page.route("https://accounts.spotify.com/authorize**", (route) =>
+    route.fulfill({
+      contentType: "text/html",
+      body: "<h1>Spotify authorization test</h1>",
+    }),
+  );
+  await page.goto("./");
+  await expect(
+    page.getByRole("button", { name: "Connect with Spotify", exact: true }),
+  ).toBeVisible();
+  await page
+    .getByRole("button", { name: "Settings and Spotify connection" })
+    .click();
+  await expect(page.getByLabel("Spotify Developer client ID")).toHaveCount(0);
+  await page.screenshot({path:"test-results/spotify-signin-desktop.png",fullPage:true});
+  await page.setViewportSize({width:390,height:844});
+  await page.screenshot({path:"test-results/spotify-signin-mobile.png",fullPage:true});
+  await page.setViewportSize({width:1280,height:720});
+  const request = page.waitForRequest(
+    "https://accounts.spotify.com/authorize**",
+  );
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: "Connect with Spotify", exact: true })
+    .click();
+  const url = new URL((await request).url());
+  expect(url.searchParams.get("client_id")).toBe(
+    "d3b5ce2ed95647348467b30b06350099",
+  );
+  expect(url.searchParams.get("redirect_uri")).toBe(
+    "http://127.0.0.1:5173/music-explorer/",
+  );
+  expect(url.searchParams.get("scope")).toBe(
+    "user-read-playback-state user-modify-playback-state",
+  );
+  expect(url.searchParams.get("code_challenge_method")).toBe("S256");
+  expect(url.searchParams.get("code_challenge")).toMatch(/^[A-Za-z0-9_-]{43}$/);
+  expect(url.searchParams.get("state")).toBeTruthy();
+  expect(url.searchParams.has("client_secret")).toBe(false);
+});

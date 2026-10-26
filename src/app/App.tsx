@@ -49,6 +49,7 @@ import {
   type PlaybackState,
   type SpotifyAdapter,
 } from "../integrations/spotify";
+import { SPOTIFY_CLIENT_ID } from "../integrations/spotify/config";
 import { Cover, clearMetadata } from "../components/Cover";
 import { Graph } from "../components/graph/Graph";
 import { Dialog } from "../components/Dialog";
@@ -96,9 +97,7 @@ export default function App() {
     "import" | "settings" | "graph" | "history" | null
   >(null);
   const [search, setSearch] = useState("");
-  const [clientId, setClientId] = useState(
-    () => sessionStorage.getItem("music-explorer.client-id") ?? "",
-  );
+  const [signingIn, setSigningIn] = useState(false);
   const [csv, setCsv] = useState("");
   const [filename, setFilename] = useState("");
   const [cutoff, setCutoff] = useState("2020-01-01");
@@ -466,6 +465,22 @@ export default function App() {
       setError(message(e));
     }
   }
+  async function connectSpotify() {
+    if (signingIn) return;
+    setSigningIn(true);
+    setError("");
+    try {
+      location.assign(
+        await beginLogin(
+          SPOTIFY_CLIENT_ID,
+          `${location.origin}${import.meta.env.BASE_URL}`,
+        ),
+      );
+    } catch (e) {
+      setError(message(e));
+      setSigningIn(false);
+    }
+  }
   async function disconnectSpotify() {
     try {
       await adapter?.exit();
@@ -499,6 +514,15 @@ export default function App() {
           </div>
         </div>
         <nav className="top-actions" aria-label="Main">
+          {!adapter && (
+            <button
+              className="primary"
+              disabled={signingIn}
+              onClick={() => void connectSpotify()}
+            >
+              {signingIn ? "Connecting…" : "Connect with Spotify"}
+            </button>
+          )}
           <button onClick={() => setModal("import")}>Import library</button>
           <button
             onClick={() => setModal("graph")}
@@ -781,8 +805,11 @@ export default function App() {
                   <div className="notice">
                     Connect Spotify and select a device to listen and enable
                     judgments.
-                    <button onClick={() => setModal("settings")}>
-                      Connect Spotify
+                    <button
+                      disabled={signingIn}
+                      onClick={() => void connectSpotify()}
+                    >
+                      Connect with Spotify
                     </button>
                   </div>
                 )}
@@ -1047,43 +1074,21 @@ export default function App() {
             Spotify Connect device. Open Spotify Desktop before refreshing
             devices.
           </p>
-          <label>
-            Spotify Developer client ID
-            <input
-              value={clientId}
-              onChange={(e) => setClientId(e.target.value)}
-              autoComplete="off"
-            />
-          </label>
           <p className="privacy">
-            Register this exact callback:{" "}
-            <code>
-              {location.origin}
-              {import.meta.env.BASE_URL}
-            </code>
-            . The client ID is public; no client secret is used.
+            Sign in on Spotify and authorize Music Explorer. Your Spotify
+            password stays on Spotify.
           </p>
           <div className="row">
             <button
               className="primary"
-              onClick={async () => {
-                try {
-                  sessionStorage.setItem(
-                    "music-explorer.client-id",
-                    clientId.trim(),
-                  );
-                  location.assign(
-                    await beginLogin(
-                      clientId.trim(),
-                      `${location.origin}${import.meta.env.BASE_URL}`,
-                    ),
-                  );
-                } catch (e) {
-                  setError(message(e));
-                }
-              }}
+              disabled={signingIn}
+              onClick={() => void connectSpotify()}
             >
-              Authorize Spotify
+              {signingIn
+                ? "Connecting…"
+                : adapter
+                  ? "Reconnect Spotify"
+                  : "Connect with Spotify"}
             </button>
             <button
               disabled={!adapter}
