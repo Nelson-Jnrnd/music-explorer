@@ -46,8 +46,9 @@ export class SpotifyPlaybackAdapter implements SpotifyAdapter {
           await this.api.repeat(previousRepeat, this.currentDeviceId);
         this.originalRepeat.delete(this.currentDeviceId);
       }
-      if (this.currentDeviceId !== deviceId)
-        await this.api.transferPlayback(deviceId);
+      // Spotify does not guarantee execution order across player endpoints.
+      // Avoid a redundant transfer before starting an already active device.
+      if (!device.is_active) await this.api.transferPlayback(deviceId);
       if (!this.originalRepeat.has(deviceId)) {
         const repeat = await this.api.repeatState();
         if (repeat === null) {

@@ -60,3 +60,5 @@ The baseline selector uses explicit contextual evidence and deterministic explor
 GitHub Actions checks tests and the production build. Pages deployment is manual, from `main`, after owner release approval and enabling Pages with GitHub Actions. A private repository requires an eligible GitHub plan; the hosted site is public. Only `dist/` is uploaded. Personal CSV/JSON must never be placed in `public/`, source imports or Actions artifacts.
 
 Approved requirements: [functional specification v1](docs/specifications/Music_Explorer_v1.md). Implementation/review evidence and remaining account-dependent checks: [acceptance](docs/verification/ACCEPTANCE.md).
+
+Playback controls use Spotify Connect. Open Spotify on the phone or computer you want to hear, refresh devices in Settings, and select that device. Resume sends a remote playback command; Listen on Spotify opens Spotify itself. The displayed time counts forward between periodic Spotify checks and resynchronizes with each response.
