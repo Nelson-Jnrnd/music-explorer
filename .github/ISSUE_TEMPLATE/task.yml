@@ -1,0 +1,64 @@
+name: Bounded task
+description: One observable, issue-owned unit of work
+labels: ["type:task"]
+title: "TASK: "
+body:
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Observable outcome
+      description: What will demonstrably work or be decided?
+    validations:
+      required: true
+  - type: dropdown
+    id: phase
+    attributes:
+      label: Phase
+      options: [Discovery, Specification, Architecture, Implementation, Verification, Infrastructure]
+    validations:
+      required: true
+  - type: input
+    id: role
+    attributes:
+      label: Assigned agent role
+      description: File slug under .github/agents (must be explicitly read)
+    validations:
+      required: true
+  - type: input
+    id: branch
+    attributes:
+      label: Working branch
+      placeholder: "feat/123-bounded-outcome"
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: In scope and owned paths
+    validations:
+      required: true
+  - type: textarea
+    id: exclusions
+    attributes:
+      label: Explicitly out of scope
+    validations:
+      required: true
+  - type: textarea
+    id: dependencies
+    attributes:
+      label: Dependencies and approved upstream artifacts
+      description: Include issue numbers and any accepted decisions/contracts
+  - type: dropdown
+    id: risk
+    attributes:
+      label: Review tier
+      options: [Routine, Full]
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria and verification commands
+      description: Be explicit about what independent review can prove
+    validations:
+      required: true

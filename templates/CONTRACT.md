@@ -1,0 +1,26 @@
+# Contract: <provider> → <consumer>
+
+- **ID:** CONTRACT-<SLUG>
+- **Status:** Draft / Approved / Superseded
+- **Canonical owner:** ...
+- **Consumer(s):** ...
+- **Originating issue:** ...
+
+## Purpose
+
+What dependency does the consumer need, in plain language?
+
+## Inputs, outputs, and events
+
+- Inputs/requests: ...
+- Outputs/events: ...
+
+## Promised semantics
+
+- Invariants, units, identity, time/order and error behavior when applicable: ...
+- Consumer may rely on: ...
+- Explicitly outside responsibility: ...
+
+## Change control
+
+Affected consumers/tests; approved decision and impact process before semantic changes. Do not copy the provider's internal algorithm into this contract.
