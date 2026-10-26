@@ -1,0 +1,305 @@
+{
+  "files": [
+    {
+      "path": ".github/workflows/app-checks.yml",
+      "bytes": 613,
+      "sha256": "eff3c26e7c4c63bac55bdbfe3551a250ec2ed2709a8faf0197d5c93b72fbfdc6",
+      "intendedRef": "feat/music-explorer-mvp",
+      "publication": "verify reachable commit in PR handoff"
+    },
+    {
+      "path": ".github/workflows/pages.yml",
+      "bytes": 888,
+      "sha256": "fac03e23b4bb33f36809885d20751396c75d5ae8693b442e55b49e03c266143c",
+      "intendedRef": "feat/music-explorer-mvp",
+      "publication": "verify reachable commit in PR handoff"
+    },
+    {
+      "path": ".gitignore",
+      "bytes": 268,
+      "sha256": "dcaa9acaf8cf339172855207b833fd6688fb51705703ca388d263b7d6d37b0fe",
+      "intendedRef": "feat/music-explorer-mvp",
+      "publication": "verify reachable commit in PR handoff"
+    },
+    {
+      "path": "PROJECT.md",
+      "bytes": 1079,
+      "sha256": "e66a88ac081c2def1fe29c261d9b72fc7aa02385459c0c0c01d0e646713c8397",
+      "intendedRef": "feat/music-explorer-mvp",
+      "publication": "verify reachable commit in PR handoff"
+    },
+    {
+      "path": "README.md",
+      "bytes": 5565,
+      "sha256": "d55aae93844a3063ca6554474a3b3b6bb1f3dd1638c2adf3f27ac09b5160449d",
+      "intendedRef": "feat/music-explorer-mvp",
+      "publication": "verify reachable commit in PR handoff"
+    },
+    {
+      "path": "docs/architecture/IMPLEMENTATION.md",
+      "bytes": 3271,
+      "sha256": "f43dc1c913843d17972e1b31b92a3932c8a7c15f30d4987999e891bfb614f6c0",
+      "intendedRef": "feat/music-explorer-mvp",
+      "publication": "verify reachable commit in PR handoff"
+    },
+    {
+      "path": "docs/decisions/001-approved-mvp.md",
+      "bytes": 820,
+      "sha256": "2efb17a2f7d132fec2a088ef75b53b8de8f7fa84e0608bdebc0df0007c52d589",
+      "intendedRef": "feat/music-explorer-mvp",
+      "publication": "verify reachable commit in PR handoff"
+    },
+    {
+      "path": "docs/specifications/Music_Explorer_v1.md",
+      "bytes": 24234,
+      "sha256": "e5cbc4b88c70936f07a477bae3743224cca4022d85e9242a231a262d6b9a3874",
+      "intendedRef": "feat/music-explorer-mvp",
+      "publication": "verify reachable commit in PR handoff"
+    },
+    {
+      "path": "docs/verification/ACCEPTANCE.md",
+      "bytes": 4432,
+      "sha256": "b36da1fc543e492c435f448d55ebf521cf9375ed6c78506c11212cc2a1da982c",
+      "intendedRef": "feat/music-explorer-mvp",
+      "publication": "verify reachable commit in PR handoff"
+    },
+    {
+      "path": "docs/verification/REVIEW.md",
+      "bytes": 1373,
+      "sha256": "b10f6de189e840d2231573ad074a99a95bedf99d7e618651327e7b7cc3472283",
+      "intendedRef": "feat/music-explorer-mvp",
+      "publication": "verify reachable commit in PR handoff"
+    },
+    {
+      "path": "index.html",
+      "bytes": 304,
+      "sha256": "4aa872ae9667dc8aa022970aeb13a41f3cbc202cf8b2c8e4e4b36bf9ebcb5ec7",
+      "intendedRef": "feat/music-explorer-mvp",
+      "publication": "verify reachable commit in PR handoff"
+    },
+    {
+      "path": "package-lock.json",
+      "bytes": 90285,
+      "sha256": "2823901527a1c1760b2a42b023116fc4f57dd0087db3f164550f9609a81b3989",
+      "intendedRef": "feat/music-explorer-mvp",
+      "publication": "verify reachable commit in PR handoff"
+    },
+    {
+      "path": "package.json",
+      "bytes": 797,
+      "sha256": "1e63e547cadfcc26392de1f735f9d304c92e257df8a9691878bd0ecab349d475",
+      "intendedRef": "feat/music-explorer-mvp",
+      "publication": "verify reachable commit in PR handoff"
+    },
+    {
+      "path": "playwright.config.ts",
+      "bytes": 907,
+      "sha256": "ec84aac32d1f36d4f72f58fbf562b8107e86616e9c862710c72858ef5ecc4bd0",
+      "intendedRef": "feat/music-explorer-mvp",
+      "publication": "verify reachable commit in PR handoff"
+    },
+    {
+      "path": "scripts/check_public_build.py",
+      "bytes": 731,
+      "sha256": "43d78e9295dbb2a90f7ceefd07cb17a79de26f49e2395f9b4b6e8b2aee5e3ee5",
+      "intendedRef": "feat/music-explorer-mvp",
+      "publication": "verify reachable commit in PR handoff"
+    },
+    {
+      "path": "scripts/source_manifest.py",
+      "bytes": 850,
+      "sha256": "229168d5866d44325d3d4c1c2b69fd7ba62a80d9caa34ba264b41dde90e52e05",
+      "intendedRef": "feat/music-explorer-mvp",
+      "publication": "verify reachable commit in PR handoff"
+    },
+    {
+      "path": "src/app/App.tsx",
+      "bytes": 40997,
+      "sha256": "34c37708adfad94eb3ca1fed4f682183592efc55f2737a2051178e0e09f10b6d",
+      "intendedRef": "feat/music-explorer-mvp",
+      "publication": "verify reachable commit in PR handoff"
+    },
+    {
+      "path": "src/components/Cover.tsx",
+      "bytes": 2091,
+      "sha256": "2086d282278c430c7c8a39232245d644e4165ff0202d14c72544ec8441ab5dbc",
+      "intendedRef": "feat/music-explorer-mvp",
+      "publication": "verify reachable commit in PR handoff"
+    },
+    {
+      "path": "src/components/Dialog.tsx",
+      "bytes": 881,
+      "sha256": "376c5c24f5cb88e34f57b4e02d4ae321b88104cb7911878a376b44bf224df1fc",
+      "intendedRef": "feat/music-explorer-mvp",
+      "publication": "verify reachable commit in PR handoff"
+    },
+    {
+      "path": "src/components/graph/Graph.tsx",
+      "bytes": 7542,
+      "sha256": "920a61d75dc0c787e0bee1173b9bc865d1550b94b0ae1730c6277b4352157e00",
+      "intendedRef": "feat/music-explorer-mvp",
+      "publication": "verify reachable commit in PR handoff"
+    },
+    {
+      "path": "src/domain/engine.test.ts",
+      "bytes": 5767,
+      "sha256": "ba758675751040945333ebc7f905c572f60218262e3e7ac348c1f7ad6fb86380",
+      "intendedRef": "feat/music-explorer-mvp",
+      "publication": "verify reachable commit in PR handoff"
+    },
+    {
+      "path": "src/domain/engine.ts",
+      "bytes": 7927,
+      "sha256": "d4a6f203f956efbcfc65a28205b7ac5e8a987b5c11dcd0c246d0e2a4afb863d7",
+      "intendedRef": "feat/music-explorer-mvp",
+      "publication": "verify reachable commit in PR handoff"
+    },
+    {
+      "path": "src/domain/model.ts",
+      "bytes": 7566,
+      "sha256": "c68aea5a8e7b56c4d6b7bb5e2ef32caab8eda2e212d7c1a15dce0d37a90c7519",
+      "intendedRef": "feat/music-explorer-mvp",
+      "publication": "verify reachable commit in PR handoff"
+    },
+    {
+      "path": "src/import/csv.test.ts",
+      "bytes": 1233,
+      "sha256": "79342ca249984923dcaa608b56eef5e1066403d434fb23aac224a751bee534ab",
+      "intendedRef": "feat/music-explorer-mvp",
+      "publication": "verify reachable commit in PR handoff"
+    },
+    {
+      "path": "src/import/csv.ts",
+      "bytes": 4859,
+      "sha256": "44d0b9517780061967e3a368b13c55b583c1cbbb69b9c348b64405bf93da7689",
+      "intendedRef": "feat/music-explorer-mvp",
+      "publication": "verify reachable commit in PR handoff"
+    },
+    {
+      "path": "src/import/history.test.ts",
+      "bytes": 1136,
+      "sha256": "d5a4df51c42bf3b0b4bd14e33130058f1b2891cba66aa732d06c9c903d6b7fce",
+      "intendedRef": "feat/music-explorer-mvp",
+      "publication": "verify reachable commit in PR handoff"
+    },
+    {
+      "path": "src/import/history.ts",
+      "bytes": 2781,
+      "sha256": "ac24c9c856eea99e3cd3202dfcbd2599391ba35602b6e0b6a9e1733a7f0e74da",
+      "intendedRef": "feat/music-explorer-mvp",
+      "publication": "verify reachable commit in PR handoff"
+    },
+    {
+      "path": "src/integrations/spotify/adapter.ts",
+      "bytes": 3602,
+      "sha256": "bd0ff547ab90300e36cb70d03c663c24de1843350cbd26783b3ba6089fce07df",
+      "intendedRef": "feat/music-explorer-mvp",
+      "publication": "verify reachable commit in PR handoff"
+    },
+    {
+      "path": "src/integrations/spotify/api.ts",
+      "bytes": 7678,
+      "sha256": "f103fa3c4b834606c4d1f929eb96cb206dd73fcd912eee9bad456156f767d6f2",
+      "intendedRef": "feat/music-explorer-mvp",
+      "publication": "verify reachable commit in PR handoff"
+    },
+    {
+      "path": "src/integrations/spotify/auth.ts",
+      "bytes": 7608,
+      "sha256": "9ef7371c870ea1b3ff4db08eb5cb220d123f7c97ce8c6ffd727d105e5c5d71b3",
+      "intendedRef": "feat/music-explorer-mvp",
+      "publication": "verify reachable commit in PR handoff"
+    },
+    {
+      "path": "src/integrations/spotify/index.ts",
+      "bytes": 439,
+      "sha256": "0368cd0594fbecddf0bb4caef53b1265bf0bacac3e878b457e2cdacf9111102b",
+      "intendedRef": "feat/music-explorer-mvp",
+      "publication": "verify reachable commit in PR handoff"
+    },
+    {
+      "path": "src/integrations/spotify/simulatedAdapter.ts",
+      "bytes": 1440,
+      "sha256": "d1c9c800353c6b3c762db1b815b26d62dc8fbef453145d6cdc7641421fb0c27d",
+      "intendedRef": "feat/music-explorer-mvp",
+      "publication": "verify reachable commit in PR handoff"
+    },
+    {
+      "path": "src/integrations/spotify/spotify.test.ts",
+      "bytes": 13631,
+      "sha256": "c7f6d0471fb831b750dbda95defa6ec55cacbdf0e3b7332d0f7857da0dee5bca",
+      "intendedRef": "feat/music-explorer-mvp",
+      "publication": "verify reachable commit in PR handoff"
+    },
+    {
+      "path": "src/integrations/spotify/types.ts",
+      "bytes": 875,
+      "sha256": "41f3fb2c784ccf9d5639a65a3fdb4a47817cb41f170ec170bacaed233a379b9b",
+      "intendedRef": "feat/music-explorer-mvp",
+      "publication": "verify reachable commit in PR handoff"
+    },
+    {
+      "path": "src/main.tsx",
+      "bytes": 234,
+      "sha256": "c1c110bec5735e33a208ef73695bc7b2c21df8a2cafb23e8697d333364c4acd7",
+      "intendedRef": "feat/music-explorer-mvp",
+      "publication": "verify reachable commit in PR handoff"
+    },
+    {
+      "path": "src/persistence/store.test.ts",
+      "bytes": 2397,
+      "sha256": "11beefd7472dd5d7f0767dff4411b2c78602743432776943255f53fe1d5ee8db",
+      "intendedRef": "feat/music-explorer-mvp",
+      "publication": "verify reachable commit in PR handoff"
+    },
+    {
+      "path": "src/persistence/store.ts",
+      "bytes": 8327,
+      "sha256": "03b55192d1cd6ce8a307739bbf22f44ad919191c77f1d02525578327652cfb3d",
+      "intendedRef": "feat/music-explorer-mvp",
+      "publication": "verify reachable commit in PR handoff"
+    },
+    {
+      "path": "src/recommendations/selector.ts",
+      "bytes": 6365,
+      "sha256": "979b8d62f8eea3e2ac61dae1bba5cf33e2a54280496fe622fba1614f5918de13",
+      "intendedRef": "feat/music-explorer-mvp",
+      "publication": "verify reachable commit in PR handoff"
+    },
+    {
+      "path": "src/style.css",
+      "bytes": 12805,
+      "sha256": "06d5f39d3cc63e04a103633eafacb1c70ca601f5175bc5b58b865c2b60fec82a",
+      "intendedRef": "feat/music-explorer-mvp",
+      "publication": "verify reachable commit in PR handoff"
+    },
+    {
+      "path": "src/vite-env.d.ts",
+      "bytes": 38,
+      "sha256": "65996936fbb042915f7b74a200fcdde7e410f32a669b1ab9597cfaa4b0faddb5",
+      "intendedRef": "feat/music-explorer-mvp",
+      "publication": "verify reachable commit in PR handoff"
+    },
+    {
+      "path": "tests/exploration.spec.ts",
+      "bytes": 13336,
+      "sha256": "cca81d19d52f1a0ffb75efc2ff714cc0c3f276e0536b2ebff60a83e1c7dee902",
+      "intendedRef": "feat/music-explorer-mvp",
+      "publication": "verify reachable commit in PR handoff"
+    },
+    {
+      "path": "tsconfig.json",
+      "bytes": 552,
+      "sha256": "0c30224d102176c8aff5f8bed938bfec35be7998ad2674f33f5208ff7411a437",
+      "intendedRef": "feat/music-explorer-mvp",
+      "publication": "verify reachable commit in PR handoff"
+    },
+    {
+      "path": "vite.config.ts",
+      "bytes": 215,
+      "sha256": "8ac7a50d4b823808b6832bf55008ac8944c1b61e25fb9bb42a5fcf90ecea9afa",
+      "intendedRef": "feat/music-explorer-mvp",
+      "publication": "verify reachable commit in PR handoff"
+    }
+  ]
+}

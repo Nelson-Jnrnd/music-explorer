@@ -5,7 +5,7 @@ export interface Device {
   is_active?: boolean;
 }
 
-export type RepeatMode = 'off' | 'context' | 'track';
+export type RepeatMode = "off" | "context" | "track";
 
 export interface PlaybackState {
   trackId: string;
@@ -35,4 +35,4 @@ export interface SpotifyAdapter {
   exit(): Promise<void>;
 }
 
-export type Reconciliation = 'confirmed' | 'mismatch' | 'uncertain';
+export type Reconciliation = "confirmed" | "mismatch" | "uncertain";
