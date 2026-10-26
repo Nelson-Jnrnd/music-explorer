@@ -50,14 +50,14 @@ import {
   type SpotifyAdapter,
 } from "../integrations/spotify";
 import { SPOTIFY_CLIENT_ID } from "../integrations/spotify/config";
+import { PlaybackProgress } from "../components/PlaybackProgress";
+import { selectDevice } from "../integrations/spotify/devices";
 import { Cover, clearMetadata } from "../components/Cover";
 import { Graph } from "../components/graph/Graph";
 import { Dialog } from "../components/Dialog";
 
 const store = new LocalStore();
 let authCompletion: Promise<void> | undefined;
-const clock = (ms: number) =>
-  `${Math.floor(ms / 60000)}:${String(Math.floor(ms / 1000) % 60).padStart(2, "0")}`;
 const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
 function download(text: string) {
   const url = URL.createObjectURL(
@@ -125,17 +125,7 @@ export default function App() {
   const refreshDevices = useCallback(async (a: SpotifyAdapter) => {
     const list = await a.devices();
     setDevices(list);
-    setDevice((old) =>
-      list.some((d) => d.id === old && !d.is_restricted)
-        ? old
-        : ((
-            list.find(
-              (d) => !d.is_restricted && /desktop|computer/i.test(d.name),
-            ) ??
-            list.find((d) => d.is_active && !d.is_restricted) ??
-            list.find((d) => !d.is_restricted)
-          )?.id ?? ""),
-    );
+    setDevice((old) => selectDevice(list, old));
   }, []);
   useEffect(() => {
     let cancelled = false;
@@ -727,24 +717,7 @@ export default function App() {
                     </a>
                   </div>
                 </div>
-                <div className="playback">
-                  <progress
-                    value={playback?.progressMs ?? 0}
-                    max={playback?.durationMs || 1}
-                    aria-label="Playback progress"
-                  />
-                  <div className="playback-meta">
-                    <span>
-                      {clock(playback?.progressMs ?? 0)} /{" "}
-                      {clock(playback?.durationMs ?? 0)}
-                    </span>
-                    <span>
-                      {playback?.repeat === "track"
-                        ? "Repeat one"
-                        : "Repeat unconfirmed · Replay available"}
-                    </span>
-                  </div>
-                </div>
+                <PlaybackProgress playback={playback} />
                 <label>
                   Spotify Connect device
                   <select
@@ -1071,7 +1044,7 @@ export default function App() {
           <h3>Spotify connection</h3>
           <p>
             Requires an authorized Spotify Premium account and a supported
-            Spotify Connect device. Open Spotify Desktop before refreshing
+            Spotify Connect device. Open Spotify on your phone or computer before refreshing
             devices.
           </p>
           <p className="privacy">

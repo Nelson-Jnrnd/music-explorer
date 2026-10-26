@@ -438,3 +438,19 @@ test("configured Spotify sign-in redirects with PKCE without asking for a client
   expect(url.searchParams.get("state")).toBeTruthy();
   expect(url.searchParams.has("client_secret")).toBe(false);
 });
+
+test("playback time advances between Spotify polls and stops when paused", async ({ page }) => {
+  await importLibrary(page);
+  await page.getByRole("button", { name: "Start exploration from Song 1 Artist 1", exact: true }).click();
+  const progress = page.getByRole("progressbar", { name: "Playback progress" });
+  await expect.poll(async () => Number(await progress.getAttribute("value")), { timeout: 3500 }).toBeGreaterThan(1000);
+  await page.getByRole("button", { name: "Pause", exact: true }).click();
+  await expect(progress).toHaveAttribute("value", "0"); // Simulator confirms zero at pause.
+  await page.waitForTimeout(1100);
+  await expect(progress).toHaveAttribute("value", "0");
+  await page.getByRole("button", { name: "Resume", exact: true }).click();
+  await expect.poll(async () => Number(await progress.getAttribute("value")), { timeout: 3500 }).toBeGreaterThan(500);
+  await page.screenshot({ path: "test-results/playback-desktop.png", fullPage: true });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.screenshot({ path: "test-results/playback-mobile.png", fullPage: true });
+});

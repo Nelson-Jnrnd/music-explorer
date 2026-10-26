@@ -387,3 +387,16 @@ describe("Spotify browser integration", () => {
     expect(expectedMatches(state, "track", "other")).toBe(false);
   });
 });
+
+it("starts playback on an active phone without a pausing transfer", async () => {
+  const api = {
+    devices: vi.fn(async () => [{ id: "phone", name: "Phone", is_active: true }]),
+    transferPlayback: vi.fn(),
+    repeatState: vi.fn(async () => "off" as const),
+    repeat: vi.fn(async () => undefined),
+    play: vi.fn(async () => undefined),
+  } as unknown as SpotifyApi;
+  await new SpotifyPlaybackAdapter(api).play("candidate", "phone");
+  expect(api.transferPlayback).not.toHaveBeenCalled();
+  expect(api.play).toHaveBeenCalledWith("candidate", "phone");
+});
