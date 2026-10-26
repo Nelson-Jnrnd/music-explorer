@@ -25,11 +25,13 @@ For deterministic browser testing, the development server accepts `?simulate=1`.
 
 ## Connect Spotify
 
-1. Create an app in the [Spotify Developer Dashboard](https://developer.spotify.com/dashboard). Development-mode owner and playback account require Premium; ensure the account is allowed for the app.
-2. Register `http://127.0.0.1:5173/music-explorer/` for development and, when hosting is enabled, `https://nelson-jnrnd.github.io/music-explorer/` for production. Register exact strings, including trailing slashes.
-3. In Settings, enter the app's public client ID and select Authorize Spotify. Only playback-state and playback-modification scopes are requested.
-4. Open Spotify Desktop (or another Connect device), refresh devices, select one, and use Resume candidate. Judgments are enabled only when the expected track/device are confirmed.
-5. Disconnect Spotify to restore the previous repeat setting and remove this tab's tokens. Browser shutdown cannot reliably run a final network request; if repeat restoration fails, change Spotify repeat manually. You can also revoke the app at [Spotify account apps](https://www.spotify.com/account/apps/).
+1. Open [Music Explorer](https://nelson-j.ch/music-explorer/) and select **Connect with Spotify**. Sign in and authorize the requested playback permissions on Spotify. Only playback-state and playback-modification scopes are requested.
+2. Open Spotify Desktop (or another Connect device), refresh devices in Settings, select one, and use Resume candidate. Judgments are enabled only when the expected track/device are confirmed. Development-mode owner and playback account require Premium; ensure the account is allowed for the Spotify app.
+3. Disconnect Spotify to restore the previous repeat setting and remove this tab's tokens. Browser shutdown cannot reliably run a final network request; if repeat restoration fails, change Spotify repeat manually. You can also revoke the app at [Spotify account apps](https://www.spotify.com/account/apps/).
+
+The deployed application uses the owner's public client ID from `src/integrations/spotify/config.ts`. This identifier is part of browser OAuth requests and is not a secret. No client secret is used or requested. Users do not need to register their own app or enter a client ID.
+
+For maintainers: register the exact production callback `https://nelson-j.ch/music-explorer/` in the [Spotify Developer Dashboard](https://developer.spotify.com/dashboard). Local development also requires `http://127.0.0.1:5173/music-explorer/`. Keep trailing slashes. A separate deployment must configure its own public client ID and register its exact callback.
 
 No live account was supplied during implementation. Real playback, eligibility, repeat-one reliability and device transfer must be verified using the checklist in [release acceptance](docs/verification/ACCEPTANCE.md).
 
