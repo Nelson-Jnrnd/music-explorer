@@ -58,8 +58,8 @@
     },
     {
       "path": "docs/verification/ACCEPTANCE.md",
-      "bytes": 4432,
-      "sha256": "b36da1fc543e492c435f448d55ebf521cf9375ed6c78506c11212cc2a1da982c",
+      "bytes": 5094,
+      "sha256": "202b3f5115e800693b1b6d3f473886102df68f167219cc949115871cc59f3d4b",
       "intendedRef": "feat/music-explorer-mvp",
       "publication": "verify reachable commit in PR handoff"
     },
