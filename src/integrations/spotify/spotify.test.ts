@@ -388,7 +388,7 @@ describe("Spotify browser integration", () => {
   });
 });
 
-it("starts playback on an active phone without a pausing transfer", async () => {
+it("starts playback on an active phone without a redundant transfer", async () => {
   const api = {
     devices: vi.fn(async () => [{ id: "phone", name: "Phone", is_active: true }]),
     transferPlayback: vi.fn(),
