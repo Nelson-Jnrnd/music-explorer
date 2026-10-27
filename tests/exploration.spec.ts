@@ -454,3 +454,56 @@ test("playback time advances between Spotify polls and stops when paused", async
   await page.setViewportSize({ width: 390, height: 844 });
   await page.screenshot({ path: "test-results/playback-mobile.png", fullPage: true });
 });
+
+test("candidate startup shows pending, delayed confirmation and actionable failure beside controls", async ({ page }) => {
+  await importLibrary(page);
+  await page.addInitScript(() => {
+    sessionStorage.setItem("music-explorer.spotify.access-token", "test-access");
+    sessionStorage.setItem("music-explorer.spotify.refresh-token", "test-refresh");
+    sessionStorage.setItem("music-explorer.spotify.expires-at", String(Date.now() + 3600000));
+    sessionStorage.setItem("music-explorer.spotify.client-id", "test-client");
+  });
+  let mode: "paused" | "delayed" | "denied" = "paused";
+  let playCalls = 0;
+  let reads = 0;
+  let releasePlay: (() => void) | undefined;
+  await page.route("https://api.spotify.com/v1/**", async (route) => {
+    const req = route.request();
+    const url = new URL(req.url());
+    if (url.pathname.endsWith("/devices")) return route.fulfill({ json: { devices: [{ id: "phone", name: "My phone", is_active: true }] } });
+    if (req.method() === "PUT" && url.pathname.endsWith("/play")) {
+      playCalls++;
+      reads = 0;
+      if (mode === "denied") return route.fulfill({ status: 403, json: { error: { reason: "PREMIUM_REQUIRED" } } });
+      if (mode === "delayed") await new Promise<void>((resolve) => { releasePlay = resolve; });
+      return route.fulfill({ status: 204 });
+    }
+    if (req.method() === "GET" && url.pathname.endsWith("/player")) {
+      reads++;
+      if (mode === "delayed" && reads < 3) return route.fulfill({ status: 204 });
+      return route.fulfill({ json: { device: { id: "phone" }, item: { id: id(1), duration_ms: 180000 }, is_playing: mode === "delayed", progress_ms: 0, repeat_state: "off" } });
+    }
+    return route.fulfill({ status: 204 });
+  });
+  await page.goto("./");
+  await page.getByRole("button", { name: "Start exploration from Song 1 Artist 1", exact: true }).click();
+  const inlineFeedback = page.locator(".transport + .notice");
+  await expect(inlineFeedback).toContainText("did not confirm candidate playback");
+  expect(playCalls).toBe(1);
+  await page.screenshot({ path: "test-results/start-unconfirmed-desktop.png", fullPage: true });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.screenshot({ path: "test-results/start-unconfirmed-mobile.png", fullPage: true });
+  mode = "delayed";
+  await page.getByRole("button", { name: "Resume candidate", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Contacting Spotify…", exact: true })).toBeDisabled();
+  await page.screenshot({ path: "test-results/start-pending-mobile.png", fullPage: true });
+  await expect.poll(() => releasePlay !== undefined).toBe(true);
+  releasePlay!();
+  await expect(page.getByRole("button", { name: "Pause", exact: true })).toBeEnabled();
+  expect(playCalls).toBe(2);
+  mode = "denied";
+  await page.getByRole("button", { name: "Replay", exact: true }).click();
+  await expect(inlineFeedback).toContainText("Spotify could not start playback (403). Spotify Premium is required.");
+  await expect(page.getByRole("button", { name: "Resume candidate", exact: true })).toBeEnabled();
+  await page.screenshot({ path: "test-results/start-denied-mobile.png", fullPage: true });
+});

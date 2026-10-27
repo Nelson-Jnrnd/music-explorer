@@ -49,6 +49,7 @@ import {
   type PlaybackState,
   type SpotifyAdapter,
 } from "../integrations/spotify";
+import { confirmPlayback } from "../integrations/spotify/confirmation";
 import { SPOTIFY_CLIENT_ID } from "../integrations/spotify/config";
 import { PlaybackProgress } from "../components/PlaybackProgress";
 import { selectDevice } from "../integrations/spotify/devices";
@@ -170,12 +171,13 @@ export default function App() {
       setPlayback(null);
       if (!id || !adapter || !device) return;
       await adapter.play(id, device);
-      const actual = await adapter.state();
+      const actual = await confirmPlayback(adapter, id, device, true);
       setPlayback(actual);
-      setConfirmed(expectedMatches(actual, id, device));
-      if (actual && !expectedMatches(actual, id, device))
-        setError(
-          "Spotify is playing another track or device. Resume candidate before rating.",
+      const started = expectedMatches(actual, id, device) && actual?.isPlaying === true;
+      setConfirmed(started);
+      if (!started)
+        throw new Error(
+          "Spotify accepted the command but did not confirm candidate playback. Open Spotify on the selected device, then try Resume candidate again.",
         );
     },
     [adapter, device],
@@ -290,15 +292,23 @@ export default function App() {
       setBusy(true);
       busyRef.current = true;
       try {
-        if (action === "replay" || !confirmed)
+        if (action === "replay" || !confirmed) {
           await playState(stateRef.current);
-        else if (playback?.isPlaying) await adapter.pause(device);
-        else await adapter.resume(device);
-        const actual = await adapter.state();
-        setPlayback(actual);
-        setConfirmed(
-          expectedMatches(actual, expected(stateRef.current) ?? "", device),
-        );
+        } else {
+          const shouldPlay = !playback?.isPlaying;
+          if (shouldPlay) await adapter.resume(device);
+          else await adapter.pause(device);
+          const actual = await confirmPlayback(
+            adapter, expected(stateRef.current) ?? "", device, shouldPlay,
+          );
+          setPlayback(actual);
+          const matches = expectedMatches(actual, expected(stateRef.current) ?? "", device);
+          setConfirmed(matches && actual?.isPlaying === shouldPlay);
+          if (!matches || actual?.isPlaying !== shouldPlay)
+            throw new Error(
+              `Spotify did not confirm ${shouldPlay ? "resuming" : "pausing"} the candidate. Check Spotify on the selected device and try again.`,
+            );
+        }
       } catch (e) {
         setConfirmed(false);
         setError(message(e));
@@ -750,7 +760,9 @@ export default function App() {
                     ) : (
                       <Play size={16} />
                     )}{" "}
-                    {!confirmed
+                    {busy
+                      ? "Contacting Spotify…"
+                      : !confirmed
                       ? "Resume candidate"
                       : playback?.isPlaying
                         ? "Pause"
@@ -774,6 +786,9 @@ export default function App() {
                     Undo <kbd>Z</kbd>
                   </button>
                 </div>
+                {error && (
+                  <p className="notice error" role="status">{error}</p>
+                )}
                 {!adapter && (
                   <div className="notice">
                     Connect Spotify and select a device to listen and enable
