@@ -234,8 +234,10 @@ export class SpotifyApi {
       if (typeof device.id !== "string" || typeof item.id !== "string")
         return null;
       const repeat = data.repeat_state;
+      const linked = item.linked_from as { id?: unknown } | null | undefined;
       return {
         trackId: item.id,
+        ...(typeof linked?.id === "string" ? { linkedFromTrackId: linked.id } : {}),
         deviceId: device.id,
         isPlaying: data.is_playing === true,
         progressMs: typeof data.progress_ms === "number" ? data.progress_ms : 0,

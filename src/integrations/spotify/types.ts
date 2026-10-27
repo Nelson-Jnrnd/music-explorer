@@ -9,6 +9,7 @@ export type RepeatMode = "off" | "context" | "track";
 
 export interface PlaybackState {
   trackId: string;
+  linkedFromTrackId?: string;
   deviceId: string;
   isPlaying: boolean;
   progressMs: number;

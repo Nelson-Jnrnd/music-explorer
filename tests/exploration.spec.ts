@@ -286,9 +286,14 @@ test("real client mock confirms artwork and blocks mismatched or unknown playbac
   let playingId = id(1);
   let unknown = false;
   let repeat = "off";
+  let pauseCalls = 0;
+  let commandCalls = 0;
+  let linkedFrom: string | undefined;
   await page.route("https://api.spotify.com/v1/**", async (route) => {
     const req = route.request();
     const url = new URL(req.url());
+    if (req.method() === "PUT") commandCalls++;
+    if (req.method() === "PUT" && url.pathname.endsWith("/pause")) pauseCalls++;
     if (req.method() === "GET" && url.pathname.endsWith("/devices"))
       return route.fulfill({
         json: {
@@ -320,7 +325,7 @@ test("real client mock confirms artwork and blocks mismatched or unknown playbac
       return route.fulfill({
         json: {
           device: { id: "desktop" },
-          item: { id: playingId, duration_ms: 180000 },
+          item: { id: playingId, duration_ms: 180000, ...(linkedFrom ? { linked_from: { id: linkedFrom } } : {}) },
           is_playing: true,
           progress_ms: 1000,
           repeat_state: repeat,
@@ -387,6 +392,32 @@ test("real client mock confirms artwork and blocks mismatched or unknown playbac
           .evaluations.length,
     ),
   ).toBe(0);
+  // Unconfirmed/reloaded sessions must not silence unrelated Spotify playback.
+  unknown = false;
+  playingId = id(44);
+  linkedFrom = await page.evaluate(() => JSON.parse(localStorage.getItem("music-explorer-recovery-v1")!).active.pendingTrackId);
+  await page.reload();
+  await expect(page.getByRole("button", { name: "Resume candidate", exact: true })).toBeEnabled();
+  const beforeCommands = commandCalls;
+  const beforePauses = pauseCalls;
+  await page.getByRole("button", { name: "Check playback", exact: true }).click();
+  await expect(page.getByRole("status").filter({ hasText: "Spotify reports playback playing" })).toContainText("Track matches candidate: no");
+  await expect(page.getByRole("status").filter({ hasText: "Spotify reports playback playing" })).toContainText("Original linked track matches candidate: yes");
+  expect(commandCalls).toBe(beforeCommands);
+  await page.waitForTimeout(5600);
+  expect(pauseCalls).toBe(beforePauses);
+  await page.screenshot({ path: "test-results/playback-check-desktop.png", fullPage: true });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.screenshot({ path: "test-results/playback-check-mobile.png", fullPage: true });
+  // An external change after candidate confirmation still blocks rating and pauses once.
+  await page.getByRole("button", { name: "Resume candidate", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Fits 3", exact: true })).toBeEnabled();
+  playingId = id(44);
+  await expect(page.getByRole("alert")).toContainText("Playback changed outside Music Explorer", { timeout: 8000 });
+  expect(pauseCalls).toBe(beforePauses + 1);
+  await page.waitForTimeout(5600);
+  expect(pauseCalls).toBe(beforePauses + 1);
+
 });
 
 test("configured Spotify sign-in redirects with PKCE without asking for a client ID", async ({
@@ -488,7 +519,7 @@ test("candidate startup shows pending, delayed confirmation and actionable failu
   });
   await page.goto("./");
   await page.getByRole("button", { name: "Start exploration from Song 1 Artist 1", exact: true }).click();
-  const inlineFeedback = page.locator(".transport + .notice");
+  const inlineFeedback = page.locator(".notice.error[role=status]");
   await expect(inlineFeedback).toContainText("did not confirm candidate playback");
   expect(playCalls).toBe(1);
   await page.screenshot({ path: "test-results/start-unconfirmed-desktop.png", fullPage: true });

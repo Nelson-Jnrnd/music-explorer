@@ -49,6 +49,7 @@ import {
   type PlaybackState,
   type SpotifyAdapter,
 } from "../integrations/spotify";
+import { describePlayback } from "../integrations/spotify/observation";
 import { confirmPlayback } from "../integrations/spotify/confirmation";
 import { SPOTIFY_CLIENT_ID } from "../integrations/spotify/config";
 import { PlaybackProgress } from "../components/PlaybackProgress";
@@ -91,6 +92,7 @@ export default function App() {
   const [busy, setBusy] = useState(false);
   const busyRef = useRef(false);
   const [error, setError] = useState("");
+  const [playbackDiagnostic, setPlaybackDiagnostic] = useState("");
   const [notice, setNotice] = useState("");
   const [saveMessage, setSaveMessage] = useState(store.status.message);
   const [failed, setFailed] = useState<State | null>(null);
@@ -168,6 +170,7 @@ export default function App() {
     async (s: State) => {
       const id = expected(s);
       setConfirmed(false);
+      setPlaybackDiagnostic("");
       setPlayback(null);
       if (!id || !adapter || !device) return;
       await adapter.play(id, device);
@@ -177,7 +180,7 @@ export default function App() {
       setConfirmed(started);
       if (!started)
         throw new Error(
-          "Spotify accepted the command but did not confirm candidate playback. Open Spotify on the selected device, then try Resume candidate again.",
+          `Spotify did not confirm candidate playback. ${describePlayback(actual, id, device)} Use Check playback to inspect the current state without starting or pausing music.`,
         );
     },
     [adapter, device],
@@ -229,7 +232,7 @@ export default function App() {
         setPlayback(actual);
         const matches = expectedMatches(actual, trackId, device);
         setConfirmed(matches);
-        if (actual && !matches) {
+        if (actual && !matches && confirmed) {
           await adapter.pause(actual.deviceId);
           if (!stopped)
             setError(
@@ -253,7 +256,7 @@ export default function App() {
       stopped = true;
       clearTimeout(timer);
     };
-  }, [adapter, device, trackId, busy, ready]);
+  }, [adapter, device, trackId, busy, ready, confirmed]);
   const decide = useCallback(
     async (verdict: "fits" | "no" | "skip") => {
       if (
@@ -286,12 +289,18 @@ export default function App() {
     [adapter, device, trackId, confirmed, failed, transaction],
   );
   const transport = useCallback(
-    async (action: "toggle" | "replay") => {
+    async (action: "toggle" | "replay" | "check") => {
       if (busyRef.current || !adapter || !device) return;
       setError("");
+      setPlaybackDiagnostic("");
       setBusy(true);
       busyRef.current = true;
       try {
+        if (action === "check") {
+          const actual = await adapter.state();
+          setPlaybackDiagnostic(describePlayback(actual, expected(stateRef.current) ?? "", device));
+          return;
+        }
         if (action === "replay" || !confirmed) {
           await playState(stateRef.current);
         } else {
@@ -428,6 +437,7 @@ export default function App() {
         return;
       await transaction(() => restored, false);
       setConfirmed(false);
+      setPlaybackDiagnostic("");
       setPlayback(null);
       setModal(null);
     } catch (e) {
@@ -786,6 +796,15 @@ export default function App() {
                     Undo <kbd>Z</kbd>
                   </button>
                 </div>
+                <button
+                  disabled={!adapter || !device || busy}
+                  onClick={() => void transport("check")}
+                >
+                  Check playback
+                </button>
+                {playbackDiagnostic && (
+                  <p className="notice" role="status">{playbackDiagnostic}</p>
+                )}
                 {error && (
                   <p className="notice error" role="status">{error}</p>
                 )}

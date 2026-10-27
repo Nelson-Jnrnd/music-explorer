@@ -476,3 +476,16 @@ it.each([200, 201, 202])("rejects an empty data GET response (%s) even with Cont
   await expect(api.state()).rejects.toMatchObject({ kind: "response", status,
     message: `Spotify could not read playback state: it returned an invalid data response (${status}). Try again.` });
 });
+
+it("retains Spotify's linked original track solely as observation evidence", async () => {
+  const storage = new MemoryStorage();
+  storage.setItem("music-explorer.spotify.access-token", "test-token");
+  storage.setItem("music-explorer.spotify.expires-at", String(Date.now() + 60000));
+  const fetcher = vi.fn(async () => response(200, { device: { id: "phone" },
+    item: { id: "replacement", linked_from: { id: "original" }, duration_ms: 1000 },
+    is_playing: true, repeat_state: "off" }));
+  const api = new SpotifyApi(new SpotifyTokenProvider(storage, fetcher), fetcher);
+  const actual = await api.state();
+  expect(actual).toMatchObject({ trackId: "replacement", linkedFromTrackId: "original" });
+  expect(expectedMatches(actual, "original", "phone")).toBe(false);
+});
