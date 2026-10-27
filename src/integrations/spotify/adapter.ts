@@ -1,5 +1,5 @@
 import { SpotifyApi } from "./api";
-import { expectedMatches } from "./auth";
+import { expectedMatches, trackIdentityMatches } from "./auth";
 import type {
   Device,
   PlaybackState,
@@ -13,7 +13,12 @@ export class SpotifyPlaybackAdapter implements SpotifyAdapter {
   private readonly originalRepeat = new Map<string, RepeatMode>();
   private currentDeviceId: string | null = null;
   private repeatUnavailable = false;
-  private resolution: { requested: string; resolved: string; device: string } | null = null;
+  private resolution: {
+    requested: string;
+    resolved: string;
+    device: string;
+    aliases: Map<string, Promise<boolean>>;
+  } | null = null;
   private operationTail: Promise<unknown> = Promise.resolve();
 
   constructor(private readonly api: SpotifyApi) {}
@@ -30,6 +35,8 @@ export class SpotifyPlaybackAdapter implements SpotifyAdapter {
 
   play(trackId: string, deviceId: string): Promise<void> {
     return this.serialized(async () => {
+      // Invalidate evidence before awaiting the next start, including failed starts.
+      this.resolution = null;
       const device = (await this.api.devices()).find(
         (candidate) => candidate.id === deviceId,
       );
@@ -69,7 +76,7 @@ export class SpotifyPlaybackAdapter implements SpotifyAdapter {
       this.currentDeviceId = deviceId;
       this.repeatUnavailable = true;
       await this.api.play(metadata.id, deviceId, metadata.albumUri);
-      this.resolution = { requested: trackId, resolved: metadata.id, device: deviceId };
+      this.resolution = { requested: trackId, resolved: metadata.id, device: deviceId, aliases: new Map() };
       if (this.originalRepeat.has(deviceId)) {
         try {
           await this.api.repeat("track", deviceId);
@@ -88,10 +95,33 @@ export class SpotifyPlaybackAdapter implements SpotifyAdapter {
     return this.serialized(() => this.api.resume(deviceId));
   }
   async state(): Promise<PlaybackState | null> {
-    const state = await this.api.state();
     const resolution = this.resolution;
-    if (state && resolution && state.trackId === resolution.resolved &&
-        state.deviceId === resolution.device)
+    const state = await this.api.state();
+    if (!state || !resolution || this.resolution !== resolution ||
+        state.deviceId !== resolution.device) return state;
+    if (state.trackId === resolution.resolved || trackIdentityMatches(state, resolution.requested))
+      return { ...state, resolvedFromTrackId: resolution.requested };
+    // A player can omit linked_from and report another catalogue ID. Ask Spotify
+    // to resolve that ID in this account's market; never infer identity from names.
+    let lookup = resolution.aliases.get(state.trackId);
+    if (!lookup) {
+      lookup = this.api.metadata(state.trackId).then((metadata) =>
+        metadata.isPlayable !== false && (
+          metadata.id === resolution.resolved || metadata.id === resolution.requested ||
+          metadata.linkedFromTrackId === resolution.resolved ||
+          metadata.linkedFromTrackId === resolution.requested
+        ),
+      ).catch(() => {
+        // A failed read supplies no proof. Allow a later explicit check to retry.
+        if (resolution.aliases.get(state.trackId) === lookup)
+          resolution.aliases.delete(state.trackId);
+        return false;
+      });
+      if (resolution.aliases.size >= 8)
+        resolution.aliases.delete(resolution.aliases.keys().next().value!);
+      resolution.aliases.set(state.trackId, lookup);
+    }
+    if (await lookup && this.resolution === resolution)
       return { ...state, resolvedFromTrackId: resolution.requested };
     return state;
   }
@@ -123,11 +153,11 @@ export class SpotifyPlaybackAdapter implements SpotifyAdapter {
 
   exit(): Promise<void> {
     return this.serialized(async () => {
+      this.resolution = null;
       for (const [deviceId, repeat] of this.originalRepeat)
         await this.api.repeat(repeat, deviceId);
       this.originalRepeat.clear();
       this.currentDeviceId = null;
-      this.resolution = null;
       this.repeatUnavailable = false;
     });
   }

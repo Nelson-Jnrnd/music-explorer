@@ -258,8 +258,10 @@ export class SpotifyApi {
       const album = data.album as
         { name?: unknown; uri?: unknown; images?: Array<{ url?: unknown }> } | undefined;
       const external = data.external_urls as { spotify?: unknown } | undefined;
+      const linked = data.linked_from as { id?: unknown } | null | undefined;
       return {
         id: data.id,
+        ...(typeof linked?.id === "string" ? { linkedFromTrackId: linked.id } : {}),
         name: data.name,
         artists: Array.isArray(data.artists)
           ? data.artists.flatMap((artist) =>
