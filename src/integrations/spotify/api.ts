@@ -123,8 +123,7 @@ export class SpotifyApi {
     }
     // Player PUT endpoints acknowledge commands; their bodies are not data.
     // Ignore even a 200 text acknowledgement instead of trying to parse JSON.
-    if (init.method === "PUT" || response.status === 202 ||
-        response.headers.get("content-length") === "0") return null;
+    if (init.method === "PUT") return null;
     try {
       return (await response.json()) as T;
     } catch (error) {

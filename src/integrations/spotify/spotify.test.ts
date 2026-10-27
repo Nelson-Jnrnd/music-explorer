@@ -465,3 +465,14 @@ it("does not mistake an HTTP rejection with a non-JSON body for a command acknow
   const api = new SpotifyApi(new SpotifyTokenProvider(storage, fetcher), fetcher);
   await expect(api.play("candidate", "phone")).rejects.toMatchObject({ status: 403, kind: "http" });
 });
+
+
+it.each([200, 201, 202])("rejects an empty data GET response (%s) even with Content-Length zero", async (status) => {
+  const storage = new MemoryStorage();
+  storage.setItem("music-explorer.spotify.access-token", "test-token");
+  storage.setItem("music-explorer.spotify.expires-at", String(Date.now() + 60000));
+  const fetcher = vi.fn(async () => new Response(null, { status, headers: { "Content-Length": "0" } }));
+  const api = new SpotifyApi(new SpotifyTokenProvider(storage, fetcher), fetcher);
+  await expect(api.state()).rejects.toMatchObject({ kind: "response", status,
+    message: `Spotify could not read playback state: it returned an invalid data response (${status}). Try again.` });
+});
