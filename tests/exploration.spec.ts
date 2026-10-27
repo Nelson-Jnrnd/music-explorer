@@ -667,6 +667,6 @@ test("player aliases without linked_from confirm through metadata and retain pla
   playingId = id(44); // Same display name, different authenticated identity.
   await page.getByRole("button", { name: "Fits 3", exact: true }).click();
   await expect(page.getByRole("alert")).toContainText("Candidate playback is not confirmed");
-  expect(pauses).toBe(pausesBeforeMismatch); // Rating check does not send commands.
+  expect(pauses).toBe(pausesBeforeMismatch + 1); // Confirmed mismatches keep the existing pause guard.
   expect(await page.evaluate(() => JSON.parse(localStorage.getItem("music-explorer-recovery-v1")!).evaluations.length)).toBe(0);
 });
