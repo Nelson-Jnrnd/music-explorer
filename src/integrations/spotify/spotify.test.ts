@@ -361,12 +361,12 @@ describe("Spotify browser integration", () => {
     await adapter.play("b", "two");
     expect(order).toEqual([
       "transfer:one",
-      "repeat:track:one",
       "play:a:one",
+      "repeat:track:one",
       "repeat:context:one",
       "transfer:two",
-      "repeat:track:two",
       "play:b:two",
+      "repeat:track:two",
     ]);
     await adapter.exit();
     expect(order.at(-1)).toBe("repeat:off:two");
@@ -399,4 +399,31 @@ it("starts playback on an active phone without a redundant transfer", async () =
   await new SpotifyPlaybackAdapter(api).play("candidate", "phone");
   expect(api.transferPlayback).not.toHaveBeenCalled();
   expect(api.play).toHaveBeenCalledWith("candidate", "phone");
+});
+
+
+it("still starts the candidate when reading optional repeat state fails", async () => {
+  const api = {
+    devices: vi.fn(async () => [{ id: "phone", name: "Phone", is_active: true }]),
+    repeatState: vi.fn(async () => { throw new Error("read denied"); }),
+    repeat: vi.fn(),
+    play: vi.fn(async () => undefined),
+  } as unknown as SpotifyApi;
+  const adapter = new SpotifyPlaybackAdapter(api);
+  await expect(adapter.play("candidate", "phone")).resolves.toBeUndefined();
+  expect(api.play).toHaveBeenCalledWith("candidate", "phone");
+  expect(api.repeat).not.toHaveBeenCalled();
+  expect(adapter.repeatStatus()).toBe("unavailable");
+});
+
+it("reports a safe playback rejection reason without displaying arbitrary server data", async () => {
+  const storage = new MemoryStorage();
+  storage.setItem("music-explorer.spotify.access-token", "token");
+  storage.setItem("music-explorer.spotify.expires-at", String(Date.now() + 60000));
+  const fetcher = vi.fn()
+    .mockResolvedValueOnce(response(403, { error: { reason: "PREMIUM_REQUIRED" } }))
+    .mockResolvedValueOnce(response(403, { error: { message: "private-server-data", reason: "unexpected-secret" } }));
+  const api = new SpotifyApi(new SpotifyTokenProvider(storage, fetcher), fetcher);
+  await expect(api.play("candidate", "phone")).rejects.toThrow("Spotify could not start playback (403). Spotify Premium is required.");
+  await expect(api.play("candidate", "phone")).rejects.toThrow("Spotify could not start playback (403). Check account eligibility and device restrictions.");
 });

@@ -76,11 +76,30 @@ export class SpotifyApi {
       );
     }
     if (!response.ok) {
+      let reason: string | undefined;
+      try {
+        const body = await response.json();
+        const knownReasons: Record<string, string> = {
+          PREMIUM_REQUIRED: "Spotify Premium is required.",
+          NO_ACTIVE_DEVICE: "Open Spotify on the selected device and refresh devices.",
+          RESTRICTION_VIOLATED: "Spotify restricted playback on this device or track.",
+          UNKNOWN: "Spotify could not complete the request.",
+        };
+        if (typeof body?.error?.reason === "string" && Object.hasOwn(knownReasons, body.error.reason))
+          reason = knownReasons[body.error.reason];
+      } catch {
+        // Error bodies are not always JSON. Never show raw server payloads.
+      }
+      const operation = path.startsWith("/me/player/play?") ? "start playback"
+        : path.startsWith("/me/player/pause?") ? "pause playback"
+        : "complete the request";
       throw new SpotifyApiError(
         response.status,
-        response.status === 403
-          ? "Spotify denied this playback request. Check account eligibility and device restrictions."
-          : `Spotify request failed (${response.status}).`,
+        `Spotify could not ${operation} (${response.status}). ${reason ?? (
+          response.status === 403
+            ? "Check account eligibility and device restrictions."
+            : "Try again, or reconnect Spotify in Settings."
+        )}`,
       );
     }
     if (

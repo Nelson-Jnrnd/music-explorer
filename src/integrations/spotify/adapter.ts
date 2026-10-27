@@ -50,23 +50,25 @@ export class SpotifyPlaybackAdapter implements SpotifyAdapter {
       // Avoid a redundant transfer before starting an already active device.
       if (!device.is_active) await this.api.transferPlayback(deviceId);
       if (!this.originalRepeat.has(deviceId)) {
-        const repeat = await this.api.repeatState();
-        if (repeat === null) {
-          this.currentDeviceId = deviceId;
-          this.repeatUnavailable = true;
-          await this.api.play(trackId, deviceId);
-          return;
+        // Repeat is optional. A failed read must not prevent the play request.
+        try {
+          const repeat = await this.api.repeatState();
+          if (repeat !== null) this.originalRepeat.set(deviceId, repeat);
+        } catch {
+          // Without a saved setting, leave repeat unchanged and offer Replay.
         }
-        this.originalRepeat.set(deviceId, repeat);
       }
       this.currentDeviceId = deviceId;
-      this.repeatUnavailable = false;
-      try {
-        await this.api.repeat("track", deviceId);
-      } catch {
-        this.repeatUnavailable = true;
-      }
+      this.repeatUnavailable = true;
       await this.api.play(trackId, deviceId);
+      if (this.originalRepeat.has(deviceId)) {
+        try {
+          await this.api.repeat("track", deviceId);
+          this.repeatUnavailable = false;
+        } catch {
+          // Playback still works when Spotify refuses repeat mode.
+        }
+      }
     });
   }
 
