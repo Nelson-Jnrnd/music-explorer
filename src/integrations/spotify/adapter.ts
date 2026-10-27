@@ -13,6 +13,7 @@ export class SpotifyPlaybackAdapter implements SpotifyAdapter {
   private readonly originalRepeat = new Map<string, RepeatMode>();
   private currentDeviceId: string | null = null;
   private repeatUnavailable = false;
+  private resolution: { requested: string; resolved: string; device: string } | null = null;
   private operationTail: Promise<unknown> = Promise.resolve();
 
   constructor(private readonly api: SpotifyApi) {}
@@ -40,6 +41,13 @@ export class SpotifyPlaybackAdapter implements SpotifyAdapter {
         throw new Error(
           "The selected Spotify device does not allow remote playback.",
         );
+      // Resolve the album before any player mutation. Bare URI lists currently
+      // fail on affected Spotify clients; album context + track offset works.
+      const metadata = await this.api.metadata(trackId);
+      if (!metadata?.albumUri || !/^spotify:album:[A-Za-z0-9]{22}$/.test(metadata.albumUri) || !metadata.id)
+        throw new Error("Spotify did not return the album needed to start this track. Use Listen on Spotify, or try another candidate.");
+      if (metadata.isPlayable === false)
+        throw new Error("Spotify reports this track is unavailable for your account. Use Listen on Spotify, or try another candidate.");
       if (this.currentDeviceId && this.currentDeviceId !== deviceId) {
         const previousRepeat = this.originalRepeat.get(this.currentDeviceId);
         if (previousRepeat !== undefined)
@@ -60,7 +68,8 @@ export class SpotifyPlaybackAdapter implements SpotifyAdapter {
       }
       this.currentDeviceId = deviceId;
       this.repeatUnavailable = true;
-      await this.api.play(trackId, deviceId);
+      await this.api.play(metadata.id, deviceId, metadata.albumUri);
+      this.resolution = { requested: trackId, resolved: metadata.id, device: deviceId };
       if (this.originalRepeat.has(deviceId)) {
         try {
           await this.api.repeat("track", deviceId);
@@ -78,8 +87,13 @@ export class SpotifyPlaybackAdapter implements SpotifyAdapter {
   resume(deviceId: string): Promise<void> {
     return this.serialized(() => this.api.resume(deviceId));
   }
-  state(): Promise<PlaybackState | null> {
-    return this.api.state();
+  async state(): Promise<PlaybackState | null> {
+    const state = await this.api.state();
+    const resolution = this.resolution;
+    if (state && resolution && state.trackId === resolution.resolved &&
+        state.deviceId === resolution.device)
+      return { ...state, resolvedFromTrackId: resolution.requested };
+    return state;
   }
   metadata(trackId: string): Promise<TrackMetadata> {
     return this.api.metadata(trackId);
@@ -113,6 +127,7 @@ export class SpotifyPlaybackAdapter implements SpotifyAdapter {
         await this.api.repeat(repeat, deviceId);
       this.originalRepeat.clear();
       this.currentDeviceId = null;
+      this.resolution = null;
       this.repeatUnavailable = false;
     });
   }

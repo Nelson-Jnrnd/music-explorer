@@ -315,6 +315,7 @@ test("real client mock confirms artwork and blocks mismatched or unknown playbac
           artists: [{ name: "Test artist" }],
           album: {
             name: "Test album",
+            uri: "spotify:album:0000000000000000000001",
             images: [{ url: "https://example.test/album.svg" }],
           },
           external_urls: { spotify: "https://open.spotify.com/" },
@@ -337,9 +338,14 @@ test("real client mock confirms artwork and blocks mismatched or unknown playbac
     if (
       req.method() === "PUT" &&
       url.pathname.endsWith("/play") &&
-      req.postDataJSON()?.uris
-    )
-      playingId = req.postDataJSON().uris[0].split(":").at(-1);
+      req.postDataJSON()?.offset?.uri
+    ) {
+      const body = req.postDataJSON();
+      expect(body.uris).toBeUndefined();
+      expect(body.context_uri).toBe("spotify:album:0000000000000000000001");
+      expect(body.position_ms).toBe(0);
+      playingId = body.offset.uri.split(":").at(-1);
+    }
     return route.fulfill({ status: 200, contentType: "text/plain", body: "opaque-command-ack" });
   });
   await page.route("https://example.test/album.svg", (r) =>
@@ -395,14 +401,14 @@ test("real client mock confirms artwork and blocks mismatched or unknown playbac
   // Unconfirmed/reloaded sessions must not silence unrelated Spotify playback.
   unknown = false;
   playingId = id(44);
-  linkedFrom = await page.evaluate(() => JSON.parse(localStorage.getItem("music-explorer-recovery-v1")!).active.pendingTrackId);
+  linkedFrom = id(43);
   await page.reload();
   await expect(page.getByRole("button", { name: "Resume candidate", exact: true })).toBeEnabled();
   const beforeCommands = commandCalls;
   const beforePauses = pauseCalls;
   await page.getByRole("button", { name: "Check playback", exact: true }).click();
   await expect(page.getByRole("status").filter({ hasText: "Spotify reports playback playing" })).toContainText("Track matches candidate: no");
-  await expect(page.getByRole("status").filter({ hasText: "Spotify reports playback playing" })).toContainText("Original linked track matches candidate: yes");
+  await expect(page.getByRole("status").filter({ hasText: "Spotify reports playback playing" })).toContainText("Original linked track matches candidate: no");
   expect(commandCalls).toBe(beforeCommands);
   await page.waitForTimeout(5600);
   expect(pauseCalls).toBe(beforePauses);
@@ -502,6 +508,10 @@ test("candidate startup shows pending, delayed confirmation and actionable failu
     const req = route.request();
     const url = new URL(req.url());
     if (url.pathname.endsWith("/devices")) return route.fulfill({ json: { devices: [{ id: "phone", name: "My phone", is_active: true }] } });
+    if (req.method() === "GET" && url.pathname.includes("/tracks/")) return route.fulfill({ json: {
+      id: url.pathname.split("/").at(-1), name: "Test track", artists: [{ name: "Test artist" }],
+      album: { name: "Test album", uri: "spotify:album:0000000000000000000001" },
+    } });
     if (req.method() === "PUT" && url.pathname.endsWith("/play")) {
       playCalls++;
       reads = 0;
@@ -544,4 +554,48 @@ test("candidate startup shows pending, delayed confirmation and actionable failu
   await expect(inlineFeedback).toContainText("The command may already have taken effect");
   expect(playCalls).toBe(4); // Each click sends one command, including failures.
   await page.screenshot({ path: "test-results/start-network-mobile.png", fullPage: true });
+});
+
+test("album-context start accepts only the authenticated metadata replacement on the selected phone", async ({ page }) => {
+  await importLibrary(page);
+  await page.addInitScript(() => {
+    sessionStorage.setItem("music-explorer.spotify.access-token", "test-access");
+    sessionStorage.setItem("music-explorer.spotify.refresh-token", "test-refresh");
+    sessionStorage.setItem("music-explorer.spotify.expires-at", String(Date.now() + 3600000));
+    sessionStorage.setItem("music-explorer.spotify.client-id", "test-client");
+  });
+  const replacement = "5WiBOUfizLpHt0NY2V7XCn";
+  let playing: string | null = null;
+  const commands: string[] = [];
+  await page.route("https://api.spotify.com/v1/**", async (route) => {
+    const req = route.request();
+    const url = new URL(req.url());
+    if (req.method() === "PUT") commands.push(url.pathname);
+    if (url.pathname.endsWith("/devices")) return route.fulfill({ json: { devices: [{ id: "phone", name: "My phone", is_active: true }] } });
+    if (url.pathname.includes("/tracks/")) {
+      expect(url.searchParams.get("market")).toBe("from_token");
+      return route.fulfill({ json: { id: replacement, name: "Black Rain", artists: [{ name: "Rhye" }], album: { name: "Synthetic album fixture", uri: "spotify:album:0000000000000000000001" }, is_playable: true } });
+    }
+    if (req.method() === "PUT" && url.pathname.endsWith("/play")) {
+      const body = req.postDataJSON();
+      expect(body).toEqual({ context_uri: "spotify:album:0000000000000000000001", offset: { uri: `spotify:track:${replacement}` }, position_ms: 0 });
+      playing = body.offset.uri.split(":").at(-1);
+      return route.fulfill({ status: 204 });
+    }
+    if (req.method() === "GET" && url.pathname.endsWith("/player")) {
+      if (!playing) return route.fulfill({ status: 204 });
+      return route.fulfill({ json: { device: { id: "phone" }, item: { id: playing, duration_ms: 180000 }, is_playing: true, repeat_state: "track", progress_ms: 0 } });
+    }
+    return route.fulfill({ status: 204 });
+  });
+  await page.goto("./");
+  await page.getByRole("button", { name: "Start exploration from Song 1 Artist 1", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Pause", exact: true })).toBeEnabled();
+  await page.getByRole("button", { name: "Check playback", exact: true }).click();
+  await expect(page.getByRole("status").filter({ hasText: "Spotify reports playback playing" })).toContainText("Track matches candidate: yes");
+  await expect(page.getByRole("status").filter({ hasText: "Spotify reports playback playing" })).toContainText("Original linked track matches candidate: not provided");
+  expect(commands).toEqual(["/v1/me/player/play"]); // Cold repeat state stays unchanged.
+  await page.screenshot({ path: "test-results/album-context-desktop.png", fullPage: true });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.screenshot({ path: "test-results/album-context-mobile.png", fullPage: true });
 });
