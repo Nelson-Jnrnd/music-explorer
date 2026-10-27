@@ -335,7 +335,7 @@ test("real client mock confirms artwork and blocks mismatched or unknown playbac
       req.postDataJSON()?.uris
     )
       playingId = req.postDataJSON().uris[0].split(":").at(-1);
-    return route.fulfill({ status: 204 });
+    return route.fulfill({ status: 200, contentType: "text/plain", body: "opaque-command-ack" });
   });
   await page.route("https://example.test/album.svg", (r) =>
     r.fulfill({
@@ -463,7 +463,7 @@ test("candidate startup shows pending, delayed confirmation and actionable failu
     sessionStorage.setItem("music-explorer.spotify.expires-at", String(Date.now() + 3600000));
     sessionStorage.setItem("music-explorer.spotify.client-id", "test-client");
   });
-  let mode: "paused" | "delayed" | "denied" = "paused";
+  let mode: "paused" | "delayed" | "denied" | "offline" = "paused";
   let playCalls = 0;
   let reads = 0;
   let releasePlay: (() => void) | undefined;
@@ -474,6 +474,7 @@ test("candidate startup shows pending, delayed confirmation and actionable failu
     if (req.method() === "PUT" && url.pathname.endsWith("/play")) {
       playCalls++;
       reads = 0;
+      if (mode === "offline") return route.abort("failed");
       if (mode === "denied") return route.fulfill({ status: 403, json: { error: { reason: "PREMIUM_REQUIRED" } } });
       if (mode === "delayed") await new Promise<void>((resolve) => { releasePlay = resolve; });
       return route.fulfill({ status: 204 });
@@ -506,4 +507,10 @@ test("candidate startup shows pending, delayed confirmation and actionable failu
   await expect(inlineFeedback).toContainText("Spotify could not start playback (403). Spotify Premium is required.");
   await expect(page.getByRole("button", { name: "Resume candidate", exact: true })).toBeEnabled();
   await page.screenshot({ path: "test-results/start-denied-mobile.png", fullPage: true });
+  mode = "offline";
+  await page.getByRole("button", { name: "Replay", exact: true }).click();
+  await expect(inlineFeedback).toContainText("Spotify could not start playback: the browser could not reach Spotify or read its response.");
+  await expect(inlineFeedback).toContainText("The command may already have taken effect");
+  expect(playCalls).toBe(4); // Each click sends one command, including failures.
+  await page.screenshot({ path: "test-results/start-network-mobile.png", fullPage: true });
 });

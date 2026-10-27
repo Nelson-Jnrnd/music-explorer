@@ -427,3 +427,52 @@ it("reports a safe playback rejection reason without displaying arbitrary server
   await expect(api.play("candidate", "phone")).rejects.toThrow("Spotify could not start playback (403). Spotify Premium is required.");
   await expect(api.play("candidate", "phone")).rejects.toThrow("Spotify could not start playback (403). Check account eligibility and device restrictions.");
 });
+
+it.each([200, 201, 202, 204])("accepts status-only player acknowledgements (%s) without reading the body", async (status) => {
+  const storage = new MemoryStorage();
+  storage.setItem("music-explorer.spotify.access-token", "test-token");
+  storage.setItem("music-explorer.spotify.expires-at", String(Date.now() + 60000));
+  const fetcher = vi.fn(async () => new Response(status === 204 ? null : "opaque-command-ack", { status }));
+  const api = new SpotifyApi(new SpotifyTokenProvider(storage, fetcher), fetcher);
+  await expect(api.play("candidate", "phone")).resolves.toBeUndefined();
+  await expect(api.resume("phone")).resolves.toBeUndefined();
+  await expect(api.pause("phone")).resolves.toBeUndefined();
+  await expect(api.repeat("track", "phone")).resolves.toBeUndefined();
+  await expect(api.transferPlayback("phone")).resolves.toBeUndefined();
+  expect(fetcher).toHaveBeenCalledTimes(5);
+});
+
+it("rejects invalid data reads safely and identifies unreadable request operations", async () => {
+  const storage = new MemoryStorage();
+  storage.setItem("music-explorer.spotify.access-token", "test-token");
+  storage.setItem("music-explorer.spotify.expires-at", String(Date.now() + 60000));
+  const fetcher = vi.fn()
+    .mockResolvedValueOnce(new Response("private-non-json-text", { status: 200 }))
+    .mockRejectedValueOnce(new TypeError("Failed to fetch"))
+    .mockRejectedValueOnce(new TypeError("Failed to fetch"));
+  const api = new SpotifyApi(new SpotifyTokenProvider(storage, fetcher), fetcher);
+  await expect(api.state()).rejects.toMatchObject({ kind: "response", message: "Spotify could not read playback state: it returned an invalid data response (200). Try again." });
+  await expect(api.play("candidate", "phone")).rejects.toMatchObject({ kind: "network", message: expect.stringContaining("start playback") });
+  await expect(api.state()).rejects.toMatchObject({ kind: "network", message: expect.stringContaining("read playback state") });
+  expect(fetcher).toHaveBeenCalledTimes(3); // No blind command retries.
+});
+
+it("does not mistake an HTTP rejection with a non-JSON body for a command acknowledgement", async () => {
+  const storage = new MemoryStorage();
+  storage.setItem("music-explorer.spotify.access-token", "test-token");
+  storage.setItem("music-explorer.spotify.expires-at", String(Date.now() + 60000));
+  const fetcher = vi.fn(async () => new Response("private-error", { status: 403 }));
+  const api = new SpotifyApi(new SpotifyTokenProvider(storage, fetcher), fetcher);
+  await expect(api.play("candidate", "phone")).rejects.toMatchObject({ status: 403, kind: "http" });
+});
+
+
+it.each([200, 201, 202])("rejects an empty data GET response (%s) even with Content-Length zero", async (status) => {
+  const storage = new MemoryStorage();
+  storage.setItem("music-explorer.spotify.access-token", "test-token");
+  storage.setItem("music-explorer.spotify.expires-at", String(Date.now() + 60000));
+  const fetcher = vi.fn(async () => new Response(null, { status, headers: { "Content-Length": "0" } }));
+  const api = new SpotifyApi(new SpotifyTokenProvider(storage, fetcher), fetcher);
+  await expect(api.state()).rejects.toMatchObject({ kind: "response", status,
+    message: `Spotify could not read playback state: it returned an invalid data response (${status}). Try again.` });
+});

@@ -7,6 +7,7 @@ export class SpotifyApiError extends Error {
     public readonly status: number,
     message: string,
     public readonly retryAfterSeconds?: number,
+    public readonly kind: "http" | "network" | "response" = "http",
   ) {
     super(message);
     this.name = "SpotifyApiError";
@@ -39,15 +40,36 @@ export class SpotifyApi {
     retry401 = true,
     retry429 = true,
   ): Promise<T | null> {
-    const send = (token: string) =>
-      this.fetcher(`${API}${path}`, {
-        ...init,
-        headers: {
-          Authorization: `Bearer ${token}`,
-          ...(init.body ? { "Content-Type": "application/json" } : {}),
-          ...init.headers,
-        },
-      });
+    const operation = path.startsWith("/me/player/play?") ? "start playback"
+      : path.startsWith("/me/player/pause?") ? "pause playback"
+      : path.startsWith("/me/player/repeat?") ? "set repeat mode"
+      : path === "/me/player/devices" ? "read available devices"
+      : path === "/me/player" && init.method === "PUT" ? "transfer playback"
+      : path === "/me/player" ? "read playback state" : "read track metadata";
+    const networkError = () => new SpotifyApiError(
+      0,
+      `Spotify could not ${operation}: the browser could not reach Spotify or read its response. ${
+        init.method === "PUT"
+          ? "The command may already have taken effect. Check Spotify before trying again."
+          : "Check your connection and try again."
+      }`,
+      undefined, "network",
+    );
+    const send = async (token: string) => {
+      try {
+        return await this.fetcher(`${API}${path}`, {
+          ...init,
+          headers: {
+            Authorization: `Bearer ${token}`,
+            ...(init.body ? { "Content-Type": "application/json" } : {}),
+            ...init.headers,
+          },
+        });
+      } catch {
+        // The browser cannot distinguish a network outage from blocked access.
+        throw networkError();
+      }
+    };
     if (this.cooldown) await this.cooldown;
     let token = await this.tokens.accessToken();
     let response = await send(token);
@@ -90,9 +112,6 @@ export class SpotifyApi {
       } catch {
         // Error bodies are not always JSON. Never show raw server payloads.
       }
-      const operation = path.startsWith("/me/player/play?") ? "start playback"
-        : path.startsWith("/me/player/pause?") ? "pause playback"
-        : "complete the request";
       throw new SpotifyApiError(
         response.status,
         `Spotify could not ${operation} (${response.status}). ${reason ?? (
@@ -102,12 +121,20 @@ export class SpotifyApi {
         )}`,
       );
     }
-    if (
-      response.status === 202 ||
-      response.headers.get("content-length") === "0"
-    )
-      return null;
-    return (await response.json()) as T;
+    // Player PUT endpoints acknowledge commands; their bodies are not data.
+    // Ignore even a 200 text acknowledgement instead of trying to parse JSON.
+    if (init.method === "PUT") return null;
+    try {
+      return (await response.json()) as T;
+    } catch (error) {
+      if (!(error instanceof SyntaxError)) throw networkError();
+      // Do not expose response excerpts: they may contain private identifiers.
+      throw new SpotifyApiError(
+        response.status,
+        `Spotify could not ${operation}: it returned an invalid data response (${response.status}). Try again.`,
+        undefined, "response",
+      );
+    }
   }
 
   devices(): Promise<Device[]> {

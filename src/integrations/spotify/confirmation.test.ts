@@ -27,3 +27,22 @@ it("confirms a pause immediately and propagates API failures without busy retrie
   await expect(confirmPlayback({ state }, "candidate", "phone", true, wait)).rejects.toThrow("rate limited");
   expect(state).toHaveBeenCalledTimes(2);
 });
+
+it("recovers from transient state transport failures but never retries HTTP or invalid data failures", async () => {
+  const { SpotifyApiError } = await import("./api");
+  const network = new SpotifyApiError(0, "read failed", undefined, "network");
+  const state = vi.fn().mockRejectedValueOnce(network).mockResolvedValueOnce(playing);
+  const wait = vi.fn(async () => undefined);
+  expect(await confirmPlayback({ state }, "candidate", "phone", true, wait)).toEqual(playing);
+  expect(state).toHaveBeenCalledTimes(2);
+  expect(wait).toHaveBeenCalledOnce();
+  state.mockReset().mockRejectedValue(network);
+  await expect(confirmPlayback({ state }, "candidate", "phone", true, wait)).rejects.toBe(network);
+  expect(state).toHaveBeenCalledTimes(4);
+  for (const kind of ["http", "response"] as const) {
+    const error = new SpotifyApiError(429, "cannot read", 30, kind);
+    state.mockReset().mockRejectedValue(error);
+    await expect(confirmPlayback({ state }, "candidate", "phone", true, wait)).rejects.toBe(error);
+    expect(state).toHaveBeenCalledOnce();
+  }
+});
