@@ -599,3 +599,74 @@ test("album-context start accepts only the authenticated metadata replacement on
   await page.setViewportSize({ width: 390, height: 844 });
   await page.screenshot({ path: "test-results/album-context-mobile.png", fullPage: true });
 });
+
+test("player aliases without linked_from confirm through metadata and retain playback and rating controls", async ({ page }) => {
+  await importLibrary(page);
+  await page.addInitScript(() => {
+    sessionStorage.setItem("music-explorer.spotify.access-token", "test-access");
+    sessionStorage.setItem("music-explorer.spotify.refresh-token", "test-refresh");
+    sessionStorage.setItem("music-explorer.spotify.expires-at", String(Date.now() + 3600000));
+    sessionStorage.setItem("music-explorer.spotify.client-id", "test-client");
+  });
+  // Synthetic relinking responses reproduce the owner's identity mismatch;
+  // this is not a claim about the live catalogue mapping for this track.
+  const reported = "47X95Rup7LOEaVIHWlkRUT";
+  const canonical = id(42);
+  let playingId = reported;
+  let isPlaying = true;
+  let plays = 0;
+  let aliasReads = 0;
+  let pauses = 0;
+  await page.route("https://api.spotify.com/v1/**", async (route) => {
+    const req = route.request();
+    const url = new URL(req.url());
+    if (url.pathname.endsWith("/devices")) return route.fulfill({ json: { devices: [{ id: "phone", name: "My phone", is_active: true }] } });
+    if (url.pathname.includes("/tracks/")) {
+      const requested = url.pathname.split("/").at(-1)!;
+      if (requested === reported) aliasReads++;
+      return route.fulfill({ json: {
+        id: requested === id(44) ? id(44) : canonical,
+        name: "Synthetic relinking fixture", artists: [{ name: "Test artist" }],
+        album: { name: "Fixture", uri: "spotify:album:0000000000000000000001" }, is_playable: true,
+      } });
+    }
+    if (req.method() === "PUT" && url.pathname.endsWith("/play")) {
+      isPlaying = true;
+      if (req.postData()) {
+        expect(req.postDataJSON()).toEqual({ context_uri: "spotify:album:0000000000000000000001", offset: { uri: `spotify:track:${canonical}` }, position_ms: 0 });
+        plays++;
+        playingId = reported;
+      }
+    }
+    if (req.method() === "PUT" && url.pathname.endsWith("/pause")) { isPlaying = false; pauses++; }
+    if (req.method() === "GET" && url.pathname.endsWith("/player"))
+      return route.fulfill({ json: { device: { id: "phone" }, item: { id: playingId, duration_ms: 180000 }, is_playing: isPlaying, repeat_state: "track", progress_ms: 0 } });
+    return route.fulfill({ status: 204 });
+  });
+  await page.goto("./");
+  await page.getByRole("button", { name: "Start exploration from Song 1 Artist 1", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Pause", exact: true })).toBeEnabled();
+  await page.getByRole("button", { name: "Next suggestion" }).click();
+  await expect(page.getByRole("button", { name: "Fits 3", exact: true })).toBeEnabled();
+  const readsBeforeCheck = aliasReads;
+  await page.getByRole("button", { name: "Check playback", exact: true }).click();
+  await expect(page.getByRole("status").filter({ hasText: "Spotify reports playback playing" })).toContainText("Track matches candidate: yes");
+  expect(aliasReads).toBe(readsBeforeCheck);
+  const playsBeforeReplay = plays;
+  await page.getByRole("button", { name: "Replay", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Pause", exact: true })).toBeEnabled();
+  expect(plays).toBe(playsBeforeReplay + 1);
+  await page.getByRole("button", { name: "Pause", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Resume", exact: true })).toBeEnabled();
+  await page.getByRole("button", { name: "Resume", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Fits 3", exact: true })).toBeEnabled();
+  await page.screenshot({ path: "test-results/identity-confirmed-desktop.png", fullPage: true });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.screenshot({ path: "test-results/identity-confirmed-mobile.png", fullPage: true });
+  const pausesBeforeMismatch = pauses;
+  playingId = id(44); // Same display name, different authenticated identity.
+  await page.getByRole("button", { name: "Fits 3", exact: true }).click();
+  await expect(page.getByRole("alert")).toContainText("Candidate playback is not confirmed");
+  expect(pauses).toBe(pausesBeforeMismatch); // Rating check does not send commands.
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem("music-explorer-recovery-v1")!).evaluations.length)).toBe(0);
+});

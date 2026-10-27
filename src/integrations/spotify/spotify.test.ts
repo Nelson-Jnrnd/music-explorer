@@ -550,6 +550,7 @@ it("confirms only the metadata-resolved original on the exact device, and clears
   api.state.mockResolvedValueOnce({ ...(await api.state()), deviceId: "other" });
   expect(expectedMatches(await adapter.state(), "original", "phone")).toBe(false);
   api.state.mockResolvedValueOnce({ ...(await api.state()), trackId: "unrelated" });
+  api.metadata.mockResolvedValueOnce(trackMetadata("unrelated"));
   expect(expectedMatches(await adapter.state(), "original", "phone")).toBe(false);
   await adapter.exit();
   expect(expectedMatches(await adapter.state(), "original", "phone")).toBe(false);

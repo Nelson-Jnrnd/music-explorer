@@ -21,6 +21,7 @@ export interface PlaybackState {
 
 export interface TrackMetadata {
   id: string;
+  linkedFromTrackId?: string;
   name: string;
   artists: string[];
   album: string;
