@@ -11,10 +11,10 @@ it("distinguishes no state, paused playback and mismatches without including ide
   expect(report).not.toContain("private");
   expect(report).not.toContain("expected");
 });
-it("reports exact and linked-original match separately without relaxing identity", () => {
+it("recognizes Spotify linked-original proof and reports it separately", () => {
   const report = describePlayback({ ...state, isPlaying: true, linkedFromTrackId: "expected" }, "expected", "private-device");
   expect(report).toContain("playback playing");
-  expect(report).toContain("Track matches candidate: no");
+  expect(report).toContain("Track matches candidate: yes");
   expect(report).toContain("Device matches selection: yes");
   expect(report).toContain("Original linked track matches candidate: yes");
   expect(describePlayback(state, "private-track", "private-device")).toContain("Track matches candidate: yes");

@@ -160,14 +160,16 @@ export class SpotifyApi {
     );
   }
 
-  play(trackId: string, deviceId: string): Promise<void> {
+  play(trackId: string, deviceId: string, albumUri: string): Promise<void> {
     return this.serialized(async () => {
       await this.request(
         `/me/player/play?device_id=${encodeURIComponent(deviceId)}`,
         {
           method: "PUT",
           body: JSON.stringify({
-            uris: [`spotify:track:${encodeURIComponent(trackId)}`],
+            context_uri: albumUri,
+            offset: { uri: `spotify:track:${encodeURIComponent(trackId)}` },
+            position_ms: 0,
           }),
         },
       );
@@ -249,12 +251,12 @@ export class SpotifyApi {
 
   metadata(trackId: string): Promise<TrackMetadata> {
     return this.request<Record<string, unknown>>(
-      `/tracks/${encodeURIComponent(trackId)}`,
+      `/tracks/${encodeURIComponent(trackId)}?market=from_token`,
     ).then((data) => {
       if (!data || typeof data.id !== "string" || typeof data.name !== "string")
         throw new Error("Spotify returned no track metadata.");
       const album = data.album as
-        { name?: unknown; images?: Array<{ url?: unknown }> } | undefined;
+        { name?: unknown; uri?: unknown; images?: Array<{ url?: unknown }> } | undefined;
       const external = data.external_urls as { spotify?: unknown } | undefined;
       return {
         id: data.id,
@@ -265,6 +267,8 @@ export class SpotifyApi {
             )
           : [],
         album: typeof album?.name === "string" ? album.name : "",
+        ...(typeof album?.uri === "string" ? { albumUri: album.uri } : {}),
+        ...(typeof data.is_playable === "boolean" ? { isPlayable: data.is_playable } : {}),
         ...(typeof album?.images?.[0]?.url === "string"
           ? { coverUrl: album.images[0].url }
           : {}),

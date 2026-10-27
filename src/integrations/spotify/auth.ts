@@ -175,13 +175,21 @@ export function disconnect(storage: StorageLike = session()): void {
   storage.removeItem("music-explorer.spotify.client-id");
 }
 
+export function trackIdentityMatches(
+  state: import("./types").PlaybackState,
+  trackId: string,
+): boolean {
+  return state.trackId === trackId || state.linkedFromTrackId === trackId ||
+    state.resolvedFromTrackId === trackId;
+}
+
 export function expectedMatches(
   state: import("./types").PlaybackState | null,
   trackId: string,
   deviceId: string,
 ): boolean {
   return Boolean(
-    state && state.trackId === trackId && state.deviceId === deviceId,
+    state && trackIdentityMatches(state, trackId) && state.deviceId === deviceId,
   );
 }
 

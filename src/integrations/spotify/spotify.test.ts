@@ -11,6 +11,9 @@ import { SpotifyApi } from "./api";
 import { SpotifyPlaybackAdapter } from "./adapter";
 import type { PlaybackState } from "./types";
 
+const ALBUM_URI = "spotify:album:0000000000000000000001";
+const trackMetadata = (id: string) => ({ id, name: "Test track", artists: ["Test artist"], album: "Test album", albumUri: ALBUM_URI, spotifyUrl: `https://open.spotify.com/track/${id}` });
+
 class MemoryStorage {
   private values = new Map<string, string>();
   getItem(key: string) {
@@ -255,7 +258,7 @@ describe("Spotify browser integration", () => {
     );
     await Promise.all([
       api.pause("device one"),
-      api.play("track/id", "device two"),
+      api.play("track/id", "device two", ALBUM_URI),
     ]);
     expect(order[0]).toContain("pause?device_id=device%20one");
     expect(order[1]).toContain("play?device_id=device%20two");
@@ -263,7 +266,7 @@ describe("Spotify browser integration", () => {
       JSON.parse(
         (fetcher as unknown as ReturnType<typeof vi.fn>).mock.calls[1][1].body,
       ),
-    ).toEqual({ uris: ["spotify:track:track%2Fid"] });
+    ).toEqual({ context_uri: ALBUM_URI, offset: { uri: "spotify:track:track%2Fid" }, position_ms: 0 });
   });
 
   it("preserves and restores repeat-one on exit; unknown playback remains uncertain and mismatches pause", async () => {
@@ -276,6 +279,7 @@ describe("Spotify browser integration", () => {
       repeat: "context",
     };
     const api = {
+      metadata: vi.fn(async (id: string) => trackMetadata(id)),
       devices: vi.fn(async () => [{ id: "device", name: "Desktop" }]),
       transferPlayback: vi.fn(async () => undefined),
       repeatState: vi.fn(async () => "context" as const),
@@ -284,7 +288,6 @@ describe("Spotify browser integration", () => {
       state: vi.fn(async () => state),
       pause: vi.fn(async () => undefined),
       resume: vi.fn(async () => undefined),
-      metadata: vi.fn(),
     } as unknown as SpotifyApi;
     const adapter = new SpotifyPlaybackAdapter(api);
     await adapter.play("wanted", "device");
@@ -304,6 +307,7 @@ describe("Spotify browser integration", () => {
 
   it("keeps playback available when repeat mode is denied and reports the fallback", async () => {
     const api = {
+      metadata: vi.fn(async (id: string) => trackMetadata(id)),
       devices: vi.fn(async () => [{ id: "device", name: "Desktop" }]),
       transferPlayback: vi.fn(async () => undefined),
       repeatState: vi.fn(async () => "off" as const),
@@ -314,12 +318,13 @@ describe("Spotify browser integration", () => {
     } as unknown as SpotifyApi;
     const adapter = new SpotifyPlaybackAdapter(api);
     await expect(adapter.play("candidate", "device")).resolves.toBeUndefined();
-    expect(api.play).toHaveBeenCalledWith("candidate", "device");
+    expect(api.play).toHaveBeenCalledWith("candidate", "device", ALBUM_URI);
     expect(adapter.repeatStatus()).toBe("unavailable");
   });
 
   it("starts a cold session when Spotify has no current repeat state, without changing repeat mode", async () => {
     const api = {
+      metadata: vi.fn(async (id: string) => trackMetadata(id)),
       devices: vi.fn(async () => [{ id: "device", name: "Desktop" }]),
       transferPlayback: vi.fn(async () => undefined),
       repeatState: vi.fn(async () => null),
@@ -331,7 +336,7 @@ describe("Spotify browser integration", () => {
       adapter.play("first-track", "device"),
     ).resolves.toBeUndefined();
     expect(api.repeat).not.toHaveBeenCalled();
-    expect(api.play).toHaveBeenCalledWith("first-track", "device");
+    expect(api.play).toHaveBeenCalledWith("first-track", "device", ALBUM_URI);
     expect(adapter.repeatStatus()).toBe("unavailable");
   });
 
@@ -339,6 +344,7 @@ describe("Spotify browser integration", () => {
     const order: string[] = [];
     let repeatReads = 0;
     const api = {
+      metadata: vi.fn(async (id: string) => trackMetadata(id)),
       devices: vi.fn(async () => [
         { id: "one", name: "One" },
         { id: "two", name: "Two" },
@@ -390,7 +396,8 @@ describe("Spotify browser integration", () => {
 
 it("starts playback on an active phone without a redundant transfer", async () => {
   const api = {
-    devices: vi.fn(async () => [{ id: "phone", name: "Phone", is_active: true }]),
+    metadata: vi.fn(async (id: string) => trackMetadata(id)),
+      devices: vi.fn(async () => [{ id: "phone", name: "Phone", is_active: true }]),
     transferPlayback: vi.fn(),
     repeatState: vi.fn(async () => "off" as const),
     repeat: vi.fn(async () => undefined),
@@ -398,20 +405,21 @@ it("starts playback on an active phone without a redundant transfer", async () =
   } as unknown as SpotifyApi;
   await new SpotifyPlaybackAdapter(api).play("candidate", "phone");
   expect(api.transferPlayback).not.toHaveBeenCalled();
-  expect(api.play).toHaveBeenCalledWith("candidate", "phone");
+  expect(api.play).toHaveBeenCalledWith("candidate", "phone", ALBUM_URI);
 });
 
 
 it("still starts the candidate when reading optional repeat state fails", async () => {
   const api = {
-    devices: vi.fn(async () => [{ id: "phone", name: "Phone", is_active: true }]),
+    metadata: vi.fn(async (id: string) => trackMetadata(id)),
+      devices: vi.fn(async () => [{ id: "phone", name: "Phone", is_active: true }]),
     repeatState: vi.fn(async () => { throw new Error("read denied"); }),
     repeat: vi.fn(),
     play: vi.fn(async () => undefined),
   } as unknown as SpotifyApi;
   const adapter = new SpotifyPlaybackAdapter(api);
   await expect(adapter.play("candidate", "phone")).resolves.toBeUndefined();
-  expect(api.play).toHaveBeenCalledWith("candidate", "phone");
+  expect(api.play).toHaveBeenCalledWith("candidate", "phone", ALBUM_URI);
   expect(api.repeat).not.toHaveBeenCalled();
   expect(adapter.repeatStatus()).toBe("unavailable");
 });
@@ -424,8 +432,8 @@ it("reports a safe playback rejection reason without displaying arbitrary server
     .mockResolvedValueOnce(response(403, { error: { reason: "PREMIUM_REQUIRED" } }))
     .mockResolvedValueOnce(response(403, { error: { message: "private-server-data", reason: "unexpected-secret" } }));
   const api = new SpotifyApi(new SpotifyTokenProvider(storage, fetcher), fetcher);
-  await expect(api.play("candidate", "phone")).rejects.toThrow("Spotify could not start playback (403). Spotify Premium is required.");
-  await expect(api.play("candidate", "phone")).rejects.toThrow("Spotify could not start playback (403). Check account eligibility and device restrictions.");
+  await expect(api.play("candidate", "phone", ALBUM_URI)).rejects.toThrow("Spotify could not start playback (403). Spotify Premium is required.");
+  await expect(api.play("candidate", "phone", ALBUM_URI)).rejects.toThrow("Spotify could not start playback (403). Check account eligibility and device restrictions.");
 });
 
 it.each([200, 201, 202, 204])("accepts status-only player acknowledgements (%s) without reading the body", async (status) => {
@@ -434,7 +442,7 @@ it.each([200, 201, 202, 204])("accepts status-only player acknowledgements (%s) 
   storage.setItem("music-explorer.spotify.expires-at", String(Date.now() + 60000));
   const fetcher = vi.fn(async () => new Response(status === 204 ? null : "opaque-command-ack", { status }));
   const api = new SpotifyApi(new SpotifyTokenProvider(storage, fetcher), fetcher);
-  await expect(api.play("candidate", "phone")).resolves.toBeUndefined();
+  await expect(api.play("candidate", "phone", ALBUM_URI)).resolves.toBeUndefined();
   await expect(api.resume("phone")).resolves.toBeUndefined();
   await expect(api.pause("phone")).resolves.toBeUndefined();
   await expect(api.repeat("track", "phone")).resolves.toBeUndefined();
@@ -452,7 +460,7 @@ it("rejects invalid data reads safely and identifies unreadable request operatio
     .mockRejectedValueOnce(new TypeError("Failed to fetch"));
   const api = new SpotifyApi(new SpotifyTokenProvider(storage, fetcher), fetcher);
   await expect(api.state()).rejects.toMatchObject({ kind: "response", message: "Spotify could not read playback state: it returned an invalid data response (200). Try again." });
-  await expect(api.play("candidate", "phone")).rejects.toMatchObject({ kind: "network", message: expect.stringContaining("start playback") });
+  await expect(api.play("candidate", "phone", ALBUM_URI)).rejects.toMatchObject({ kind: "network", message: expect.stringContaining("start playback") });
   await expect(api.state()).rejects.toMatchObject({ kind: "network", message: expect.stringContaining("read playback state") });
   expect(fetcher).toHaveBeenCalledTimes(3); // No blind command retries.
 });
@@ -463,7 +471,7 @@ it("does not mistake an HTTP rejection with a non-JSON body for a command acknow
   storage.setItem("music-explorer.spotify.expires-at", String(Date.now() + 60000));
   const fetcher = vi.fn(async () => new Response("private-error", { status: 403 }));
   const api = new SpotifyApi(new SpotifyTokenProvider(storage, fetcher), fetcher);
-  await expect(api.play("candidate", "phone")).rejects.toMatchObject({ status: 403, kind: "http" });
+  await expect(api.play("candidate", "phone", ALBUM_URI)).rejects.toMatchObject({ status: 403, kind: "http" });
 });
 
 
@@ -477,7 +485,7 @@ it.each([200, 201, 202])("rejects an empty data GET response (%s) even with Cont
     message: `Spotify could not read playback state: it returned an invalid data response (${status}). Try again.` });
 });
 
-it("retains Spotify's linked original track solely as observation evidence", async () => {
+it("retains Spotify's linked original track as identity evidence", async () => {
   const storage = new MemoryStorage();
   storage.setItem("music-explorer.spotify.access-token", "test-token");
   storage.setItem("music-explorer.spotify.expires-at", String(Date.now() + 60000));
@@ -487,5 +495,72 @@ it("retains Spotify's linked original track solely as observation evidence", asy
   const api = new SpotifyApi(new SpotifyTokenProvider(storage, fetcher), fetcher);
   const actual = await api.state();
   expect(actual).toMatchObject({ trackId: "replacement", linkedFromTrackId: "original" });
-  expect(expectedMatches(actual, "original", "phone")).toBe(false);
+  expect(expectedMatches(actual, "original", "phone")).toBe(true);
+});
+
+it("sends Black Rain through its album and exact track offset, never a bare URI list", async () => {
+  const storage = new MemoryStorage();
+  storage.setItem("music-explorer.spotify.access-token", "test-token");
+  storage.setItem("music-explorer.spotify.expires-at", String(Date.now() + 60000));
+  const fetcher = vi.fn(async () => response(204));
+  const api = new SpotifyApi(new SpotifyTokenProvider(storage, fetcher), fetcher);
+  await api.play("5WiBOUfizLpHt0NY2V7XCn", "phone", ALBUM_URI);
+  expect(fetcher.mock.calls).toHaveLength(1);
+  const init = (fetcher.mock.calls[0] as unknown as [string, RequestInit])[1];
+  expect(JSON.parse(init.body as string)).toEqual({
+    context_uri: ALBUM_URI, // Synthetic album fixture; no live account claim.
+    offset: { uri: "spotify:track:5WiBOUfizLpHt0NY2V7XCn" },
+    position_ms: 0,
+  });
+});
+
+function albumPlaybackApi() {
+  const actual: PlaybackState = { trackId: "replacement", deviceId: "phone", isPlaying: true, progressMs: 0, durationMs: 1000, repeat: "track" };
+  return {
+    metadata: vi.fn(async () => trackMetadata("replacement")),
+    devices: vi.fn(async () => [{ id: "phone", name: "Phone", is_active: false }]),
+    transferPlayback: vi.fn(async () => undefined),
+    repeatState: vi.fn(async () => "off" as const),
+    repeat: vi.fn(async () => undefined),
+    play: vi.fn(async () => undefined),
+    pause: vi.fn(async () => undefined),
+    state: vi.fn(async () => actual),
+  };
+}
+
+it.each(["lookup-failed", "missing-album", "unplayable"])("does not change phone playback when metadata is %s", async (problem) => {
+  const api = albumPlaybackApi();
+  if (problem === "lookup-failed") api.metadata.mockRejectedValueOnce(new Error("lookup failed"));
+  if (problem === "missing-album") api.metadata.mockResolvedValueOnce({ ...trackMetadata("replacement"), albumUri: "" });
+  if (problem === "unplayable") api.metadata.mockResolvedValueOnce({ ...trackMetadata("replacement"), isPlayable: false } as ReturnType<typeof trackMetadata>);
+  await expect(new SpotifyPlaybackAdapter(api as unknown as SpotifyApi).play("original", "phone")).rejects.toThrow();
+  expect(api.play).not.toHaveBeenCalled();
+  expect(api.transferPlayback).not.toHaveBeenCalled();
+  expect(api.repeat).not.toHaveBeenCalled();
+  expect(api.pause).not.toHaveBeenCalled();
+});
+
+it("confirms only the metadata-resolved original on the exact device, and clears resolution on exit", async () => {
+  const api = albumPlaybackApi();
+  const adapter = new SpotifyPlaybackAdapter(api as unknown as SpotifyApi);
+  await adapter.play("original", "phone");
+  expect(api.metadata).toHaveBeenCalledWith("original");
+  expect(api.play).toHaveBeenCalledWith("replacement", "phone", ALBUM_URI);
+  expect(expectedMatches(await adapter.state(), "original", "phone")).toBe(true);
+  api.state.mockResolvedValueOnce({ ...(await api.state()), deviceId: "other" });
+  expect(expectedMatches(await adapter.state(), "original", "phone")).toBe(false);
+  api.state.mockResolvedValueOnce({ ...(await api.state()), trackId: "unrelated" });
+  expect(expectedMatches(await adapter.state(), "original", "phone")).toBe(false);
+  await adapter.exit();
+  expect(expectedMatches(await adapter.state(), "original", "phone")).toBe(false);
+});
+
+it("uses authenticated market metadata and retains album and availability fields", async () => {
+  const storage = new MemoryStorage();
+  storage.setItem("music-explorer.spotify.access-token", "test-token");
+  storage.setItem("music-explorer.spotify.expires-at", String(Date.now() + 60000));
+  const fetcher = vi.fn(async () => response(200, { id: "replacement", name: "Test", artists: [], is_playable: false, album: { name: "Album", uri: ALBUM_URI } }));
+  const api = new SpotifyApi(new SpotifyTokenProvider(storage, fetcher), fetcher);
+  await expect(api.metadata("original")).resolves.toMatchObject({ id: "replacement", albumUri: ALBUM_URI, isPlayable: false });
+  expect(String((fetcher.mock.calls[0] as unknown as [string])[0])).toContain("/tracks/original?market=from_token");
 });

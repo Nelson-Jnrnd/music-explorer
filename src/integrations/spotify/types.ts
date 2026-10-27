@@ -10,6 +10,8 @@ export type RepeatMode = "off" | "context" | "track";
 export interface PlaybackState {
   trackId: string;
   linkedFromTrackId?: string;
+  // Original request resolved to this reported ID through authenticated metadata.
+  resolvedFromTrackId?: string;
   deviceId: string;
   isPlaying: boolean;
   progressMs: number;
@@ -22,6 +24,8 @@ export interface TrackMetadata {
   name: string;
   artists: string[];
   album: string;
+  albumUri?: string;
+  isPlayable?: boolean;
   coverUrl?: string;
   spotifyUrl: string;
 }
