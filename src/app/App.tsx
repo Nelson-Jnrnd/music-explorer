@@ -298,7 +298,7 @@ export default function App() {
       try {
         if (action === "check") {
           const actual = await adapter.state();
-          setPlaybackDiagnostic(describePlayback(actual, expected(stateRef.current) ?? "", device));
+          setPlaybackDiagnostic(describePlayback(actual, expected(stateRef.current) ?? "", device, true));
           return;
         }
         if (action === "replay" || !confirmed) {
