@@ -406,15 +406,22 @@ test("real client mock confirms artwork and blocks mismatched or unknown playbac
   await expect(page.getByRole("button", { name: "Resume candidate", exact: true })).toBeEnabled();
   const beforeCommands = commandCalls;
   const beforePauses = pauseCalls;
-  await page.getByRole("button", { name: "Check playback", exact: true }).click();
+  const candidateId = (await page.getByRole("link", { name: "Listen on Spotify", exact: false }).getAttribute("href"))!.split("/").at(-1);
+  await page.getByRole("button", { name: "Check playback", exact: true }).focus();
+  await page.keyboard.press("Enter");
   await expect(page.getByRole("status").filter({ hasText: "Spotify reports playback playing" })).toContainText("Track matches candidate: no");
   await expect(page.getByRole("status").filter({ hasText: "Spotify reports playback playing" })).toContainText("Original linked track matches candidate: no");
+  await expect(page.getByRole("status").filter({ hasText: "Spotify reports playback playing" })).toContainText(`Candidate track ID: ${candidateId}. Spotify-reported track ID: ${id(44)}.`);
+  await expect(page.getByRole("button", { name: "Fits 3", exact: true })).toBeDisabled();
   expect(commandCalls).toBe(beforeCommands);
   await page.waitForTimeout(5600);
   expect(pauseCalls).toBe(beforePauses);
   await page.screenshot({ path: "test-results/playback-check-desktop.png", fullPage: true });
+  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
   await page.setViewportSize({ width: 390, height: 844 });
   await page.screenshot({ path: "test-results/playback-check-mobile.png", fullPage: true });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBeTruthy();
+  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
   // An external change after candidate confirmation still blocks rating and pauses once.
   await page.getByRole("button", { name: "Resume candidate", exact: true }).click();
   await expect(page.getByRole("button", { name: "Fits 3", exact: true })).toBeEnabled();
