@@ -24,6 +24,43 @@ function fixture() {
   return { api, adapter: new SpotifyPlaybackAdapter(api as unknown as SpotifyApi) };
 }
 
+it("confirms the owner's exact observed catalogue pair only after accepted start, and preserves the reported ID", async () => {
+  const { api, adapter } = fixture();
+  const reported = "0FjI1qnqhQbJNZn0zZRUZK";
+  api.metadata.mockImplementation(async (id) => metadata(id)); // Neither ID relinks.
+  api.state.mockResolvedValue(state(reported));
+  expect(expectedMatches(await adapter.state(), candidate, "phone")).toBe(false);
+  await adapter.play(candidate, "phone");
+  const actual = await adapter.state();
+  expect(actual?.trackId).toBe(reported);
+  expect(actual?.linkedFromTrackId).toBeUndefined();
+  expect(expectedMatches(actual, candidate, "phone")).toBe(true);
+  expect(api.metadata).toHaveBeenCalledTimes(1); // No missing metadata link is required.
+  api.state.mockResolvedValueOnce(state(reported, "another-phone"));
+  expect(expectedMatches(await adapter.state(), candidate, "phone")).toBe(false);
+  api.state.mockResolvedValueOnce(state("unlisted-same-name"));
+  expect(expectedMatches(await adapter.state(), candidate, "phone")).toBe(false);
+  await adapter.exit();
+  expect(expectedMatches(await adapter.state(), candidate, "phone")).toBe(false);
+});
+
+it("does not reverse the observed pair or retain it after a failed start or another candidate", async () => {
+  const { api, adapter } = fixture();
+  const reported = "0FjI1qnqhQbJNZn0zZRUZK";
+  api.metadata.mockImplementation(async (id) => metadata(id));
+  api.state.mockResolvedValue(state(reported));
+  await adapter.play(candidate, "phone");
+  expect(expectedMatches(await adapter.state(), candidate, "phone")).toBe(true);
+  api.play.mockRejectedValueOnce(new Error("start failed"));
+  await expect(adapter.play(candidate, "phone")).rejects.toThrow("start failed");
+  expect(expectedMatches(await adapter.state(), candidate, "phone")).toBe(false);
+  await adapter.play("another-candidate", "phone");
+  expect(expectedMatches(await adapter.state(), "another-candidate", "phone")).toBe(false);
+  await adapter.play(reported, "phone");
+  api.state.mockResolvedValue(state(candidate));
+  expect(expectedMatches(await adapter.state(), reported, "phone")).toBe(false);
+});
+
 it.each(["canonical", "linked-original"])("confirms missing player linked_from through authenticated %s proof, without player commands", async (proof) => {
   const { api, adapter } = fixture();
   await adapter.play(candidate, "phone");

@@ -8,6 +8,19 @@ A market replacement may have another ID. Accept identity only when Spotify repo
 
 Cache at most eight reported-ID lookup results (including in-flight requests) per accepted start, so polling does not repeatedly fetch stable aliases or unrelated IDs. Failed reads may retry. Clear the runtime association before every new start and on exit, and discard proof completed for an obsolete start. Exact device checks remain mandatory.
 
+## Observed catalogue compatibility pair
+
+There is one directional exception to metadata-only identity proof: requested `47X95Rup7LOEaVIHWlkRUT` may be reported as `0FjI1qnqhQbJNZn0zZRUZK`. On 2026-10-29 the owner supplied the Web API diagnostic showing this exact pair, playing on the selected phone without `linked_from`. They confirmed the intended song audibly plays and Replay restarts it; both the app link and Spotify app Share link use the requested ID. Both public Spotify pages identify "She's A Big Boy" by Mcbaise; the requested entry's page title additionally mentions a music video. An audio/video catalogue distinction is plausible, but is not established by an official API contract.
+
+`catalogueAliases.ts` records this exact observed pair. The adapter accepts it only within the runtime resolution of a successfully accepted start of the requested entry on the exact selected device. It preserves the actual reported ID, original library ID and original judgment identity, annotating the same runtime `resolvedFromTrackId` used by metadata proof. It is not a global or bidirectional equivalence. No-start/reloaded sessions, failed starts, exit, other devices and other IDs receive no exception. All unlisted pairs retain the metadata/linked-from rules above. This narrow compatibility fix relies on the owner's observed intended playback plus the catalogue pages, not matching names as an algorithm. Adding another pair requires its own observed evidence and independent review. Live acceptance of this fix remains the owner's next check under issue #20.
+
+Evidence:
+- https://github.com/Nelson-Jnrnd/music-explorer/issues/20
+- https://open.spotify.com/track/47X95Rup7LOEaVIHWlkRUT
+- https://open.spotify.com/track/0FjI1qnqhQbJNZn0zZRUZK
+
+## Diagnostics and repeat
+
 Default error summaries omit identifiers. An explicit Check playback also displays the expected and Web API-reported public track IDs, restricted to Spotify's 22-character base62 catalogue format. This distinguishes what the Web API reports from the Spotify app's Share link when confirmation fails. Missing or malformed IDs display as unavailable. Device/account identifiers, tokens and raw payloads remain excluded. The report stays in the existing local UI state, with no persistence or automatic transmission. This diagnostic supplies evidence; it does not relax confirmation or send player commands. Matching Share links alone are not proof of the Web API's reported identity.
 
 Repeat-one remains preferred and the existing Replay fallback remains visible when repeat cannot be established. Album context can continue to another song if repeat fails; existing playback polling blocks rating and pauses confirmed mismatches, with up to the polling interval before detection. No playlist creation, queue mutation, new scopes or backend is introduced.

@@ -10,7 +10,7 @@ export type RepeatMode = "off" | "context" | "track";
 export interface PlaybackState {
   trackId: string;
   linkedFromTrackId?: string;
-  // Original request resolved to this reported ID through authenticated metadata.
+  // Accepted start tied this reported ID to the request via metadata or a known catalogue alias.
   resolvedFromTrackId?: string;
   deviceId: string;
   isPlaying: boolean;

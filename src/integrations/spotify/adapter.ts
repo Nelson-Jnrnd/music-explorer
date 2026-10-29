@@ -1,5 +1,6 @@
 import { SpotifyApi } from "./api";
 import { expectedMatches, trackIdentityMatches } from "./auth";
+import { isKnownPlaybackAlias } from "./catalogueAliases";
 import type {
   Device,
   PlaybackState,
@@ -99,7 +100,8 @@ export class SpotifyPlaybackAdapter implements SpotifyAdapter {
     const state = await this.api.state();
     if (!state || !resolution || this.resolution !== resolution ||
         state.deviceId !== resolution.device) return state;
-    if (state.trackId === resolution.resolved || trackIdentityMatches(state, resolution.requested))
+    if (state.trackId === resolution.resolved || trackIdentityMatches(state, resolution.requested) ||
+        isKnownPlaybackAlias(resolution.requested, state.trackId))
       return { ...state, resolvedFromTrackId: resolution.requested };
     // A player can omit linked_from and report another catalogue ID. Ask Spotify
     // to resolve that ID in this account's market; never infer identity from names.
