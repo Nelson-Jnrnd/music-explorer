@@ -1,6 +1,5 @@
 import { SpotifyApi } from "./api";
 import { expectedMatches, trackIdentityMatches } from "./auth";
-import { isKnownPlaybackAlias } from "./catalogueAliases";
 import type {
   Device,
   PlaybackState,
@@ -18,11 +17,13 @@ export class SpotifyPlaybackAdapter implements SpotifyAdapter {
     requested: string;
     resolved: string;
     device: string;
-    aliases: Map<string, Promise<boolean>>;
+    reported: string | null;
+    acceptAfter: number;
+    acceptUntil: number;
   } | null = null;
   private operationTail: Promise<unknown> = Promise.resolve();
 
-  constructor(private readonly api: SpotifyApi) {}
+  constructor(private readonly api: SpotifyApi, private readonly now = () => Date.now()) {}
 
   private serialized<T>(operation: () => Promise<T>): Promise<T> {
     const result = this.operationTail.then(operation, operation);
@@ -77,7 +78,6 @@ export class SpotifyPlaybackAdapter implements SpotifyAdapter {
       this.currentDeviceId = deviceId;
       this.repeatUnavailable = true;
       await this.api.play(metadata.id, deviceId, metadata.albumUri);
-      this.resolution = { requested: trackId, resolved: metadata.id, device: deviceId, aliases: new Map() };
       if (this.originalRepeat.has(deviceId)) {
         try {
           await this.api.repeat("track", deviceId);
@@ -86,6 +86,11 @@ export class SpotifyPlaybackAdapter implements SpotifyAdapter {
           // Playback still works when Spotify refuses repeat mode.
         }
       }
+      // The owner trusts Spotify's successful start acknowledgement. Bind one
+      // playing report shortly after this operation returns, even if its ID differs.
+      const acceptedAt = this.now();
+      this.resolution = { requested: trackId, resolved: metadata.id, device: deviceId,
+        reported: null, acceptAfter: acceptedAt + 750, acceptUntil: acceptedAt + 5000 };
     });
   }
 
@@ -97,34 +102,17 @@ export class SpotifyPlaybackAdapter implements SpotifyAdapter {
   }
   async state(): Promise<PlaybackState | null> {
     const resolution = this.resolution;
+    const readStartedAt = this.now();
     const state = await this.api.state();
     if (!state || !resolution || this.resolution !== resolution ||
         state.deviceId !== resolution.device) return state;
-    if (state.trackId === resolution.resolved || trackIdentityMatches(state, resolution.requested) ||
-        isKnownPlaybackAlias(resolution.requested, state.trackId))
-      return { ...state, resolvedFromTrackId: resolution.requested };
-    // A player can omit linked_from and report another catalogue ID. Ask Spotify
-    // to resolve that ID in this account's market; never infer identity from names.
-    let lookup = resolution.aliases.get(state.trackId);
-    if (!lookup) {
-      lookup = this.api.metadata(state.trackId).then((metadata) =>
-        metadata.isPlayable !== false && (
-          metadata.id === resolution.resolved || metadata.id === resolution.requested ||
-          metadata.linkedFromTrackId === resolution.resolved ||
-          metadata.linkedFromTrackId === resolution.requested
-        ),
-      ).catch(() => {
-        // A failed read supplies no proof. Allow a later explicit check to retry.
-        if (resolution.aliases.get(state.trackId) === lookup)
-          resolution.aliases.delete(state.trackId);
-        return false;
-      });
-      if (resolution.aliases.size >= 8)
-        resolution.aliases.delete(resolution.aliases.keys().next().value!);
-      resolution.aliases.set(state.trackId, lookup);
-    }
-    if (await lookup && this.resolution === resolution)
-      return { ...state, resolvedFromTrackId: resolution.requested };
+    const knownIdentity = state.trackId === resolution.resolved || trackIdentityMatches(state, resolution.requested);
+    if (resolution.reported === null && state.isPlaying && (knownIdentity || (
+        readStartedAt >= resolution.acceptAfter && readStartedAt <= resolution.acceptUntil &&
+        this.now() <= resolution.acceptUntil)))
+      resolution.reported = state.trackId;
+    if (state.trackId === resolution.reported || knownIdentity)
+      return { ...state, acceptedForTrackId: resolution.requested };
     return state;
   }
   metadata(trackId: string): Promise<TrackMetadata> {

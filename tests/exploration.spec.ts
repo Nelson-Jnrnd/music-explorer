@@ -563,7 +563,7 @@ test("candidate startup shows pending, delayed confirmation and actionable failu
   await page.screenshot({ path: "test-results/start-network-mobile.png", fullPage: true });
 });
 
-test("album-context start accepts only the authenticated metadata replacement on the selected phone", async ({ page }) => {
+test("album-context start confirms the metadata replacement on the selected phone", async ({ page }) => {
   await importLibrary(page);
   await page.addInitScript(() => {
     sessionStorage.setItem("music-explorer.spotify.access-token", "test-access");
@@ -607,7 +607,7 @@ test("album-context start accepts only the authenticated metadata replacement on
   await page.screenshot({ path: "test-results/album-context-mobile.png", fullPage: true });
 });
 
-test("player aliases without linked_from confirm through metadata and retain playback and rating controls", async ({ page }) => {
+test("acknowledged starts with different IDs retain playback and rating controls", async ({ page }) => {
   await importLibrary(page);
   await page.addInitScript(() => {
     sessionStorage.setItem("music-explorer.spotify.access-token", "test-access");
@@ -678,12 +678,15 @@ test("player aliases without linked_from confirm through metadata and retain pla
   expect(await page.evaluate(() => JSON.parse(localStorage.getItem("music-explorer-recovery-v1")!).evaluations.length)).toBe(0);
 });
 
-test("owner-observed catalogue pair unlocks rating without metadata relinking", async ({ page }) => {
-  const requested = "47X95Rup7LOEaVIHWlkRUT";
-  const reported = "0FjI1qnqhQbJNZn0zZRUZK";
+for (const [requested, reported] of [
+  ["47X95Rup7LOEaVIHWlkRUT", "0FjI1qnqhQbJNZn0zZRUZK"],
+  ["57FP4k7tJYbUiYyhJUSGzA", "4VfkyTjwl5whB7xcl4jUnC"],
+  [id(31), id(32)], // Previously unknown pair: no runtime catalogue exception.
+]) {
+test(`accepted command unlocks rating for ${requested} without ID equivalence`, async ({ page }) => {
   await importLibrary(page, "Track URI,Track Name,Artist Name(s),Album Name,Added At\n" +
     `spotify:track:${id(1)},Song 1,Artist 1,Fixture,2024-02-01\n` +
-    `spotify:track:${requested},She's A Big Boy,Mcbaise,Fixture,2024-02-01`, 2);
+    `spotify:track:${requested},Candidate fixture,Fixture artist,Fixture,2024-02-01`, 2);
   await page.addInitScript(() => {
     sessionStorage.setItem("music-explorer.spotify.access-token", "test-access");
     sessionStorage.setItem("music-explorer.spotify.refresh-token", "test-refresh");
@@ -717,7 +720,7 @@ test("owner-observed catalogue pair unlocks rating without metadata relinking", 
   await page.goto("./");
   await page.getByRole("button", { name: "Start exploration from Song 1 Artist 1", exact: true }).click();
   await page.getByRole("button", { name: "Next suggestion" }).click();
-  await expect(page.getByRole("heading", { level: 1 })).toHaveText("She's A Big Boy");
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Candidate fixture");
   await expect(page.getByRole("button", { name: "Fits 3", exact: true })).toBeEnabled();
   await page.getByRole("button", { name: "Replay", exact: true }).click();
   await expect(page.getByRole("button", { name: "Pause", exact: true })).toBeEnabled();
@@ -729,9 +732,9 @@ test("owner-observed catalogue pair unlocks rating without metadata relinking", 
   const diagnostic = page.getByRole("status").filter({ hasText: "Spotify reports playback playing" });
   await expect(diagnostic).toContainText("Track matches candidate: yes");
   await expect(diagnostic).toContainText(`Candidate track ID: ${requested}. Spotify-reported track ID: ${reported}.`);
-  await page.screenshot({ path: "test-results/observed-pair-desktop.png", fullPage: true });
+  await page.screenshot({ path: `test-results/accepted-command-${requested}-desktop.png`, fullPage: true });
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.screenshot({ path: "test-results/observed-pair-mobile.png", fullPage: true });
+  await page.screenshot({ path: `test-results/accepted-command-${requested}-mobile.png`, fullPage: true });
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
   await page.getByRole("heading", { level: 1 }).click();
   await page.keyboard.press("3");
@@ -739,3 +742,4 @@ test("owner-observed catalogue pair unlocks rating without metadata relinking", 
   const saved = await page.evaluate(() => JSON.parse(localStorage.getItem("music-explorer-recovery-v1")!));
   expect(saved.evaluations[0].candidateSpotifyTrackId).toBe(requested);
 });
+}

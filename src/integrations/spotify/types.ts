@@ -10,8 +10,8 @@ export type RepeatMode = "off" | "context" | "track";
 export interface PlaybackState {
   trackId: string;
   linkedFromTrackId?: string;
-  // Accepted start tied this reported ID to the request via metadata or a known catalogue alias.
-  resolvedFromTrackId?: string;
+  // Runtime request association under the owner's accepted-command trust policy.
+  acceptedForTrackId?: string;
   deviceId: string;
   isPlaying: boolean;
   progressMs: number;
