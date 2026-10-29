@@ -180,7 +180,7 @@ export function trackIdentityMatches(
   trackId: string,
 ): boolean {
   return state.trackId === trackId || state.linkedFromTrackId === trackId ||
-    state.resolvedFromTrackId === trackId;
+    state.acceptedForTrackId === trackId;
 }
 
 export function expectedMatches(

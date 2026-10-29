@@ -1,169 +1,129 @@
 import { expect, it, vi } from "vitest";
-import { SpotifyApi } from "./api";
+import { SpotifyApi, SpotifyApiError } from "./api";
 import { SpotifyPlaybackAdapter } from "./adapter";
-import { expectedMatches, SpotifyTokenProvider } from "./auth";
-import type { PlaybackState, TrackMetadata } from "./types";
+import { expectedMatches } from "./auth";
+import type { PlaybackState } from "./types";
 
-// Owner's failing link; all other IDs and the album are synthetic fixtures.
-const candidate = "47X95Rup7LOEaVIHWlkRUT";
-const metadata = (id: string): TrackMetadata => ({
-  id, name: "She's A Big Boy", artists: ["Mcbaise"], album: "Fixture",
-  albumUri: "spotify:album:0000000000000000000001", spotifyUrl: "https://open.spotify.com/",
-});
-const state = (trackId = "player-id", deviceId = "phone"): PlaybackState => ({
-  trackId, deviceId, isPlaying: true, progressMs: 1000, durationMs: 180000, repeat: "track",
+const state = (trackId = "reported", deviceId = "phone", isPlaying = true): PlaybackState => ({
+  trackId, deviceId, isPlaying, progressMs: 1000, durationMs: 180000, repeat: "track",
 });
 function fixture() {
+  let time = 0;
   const api = {
     devices: vi.fn(async () => [{ id: "phone", name: "Phone", is_active: true }]),
-    metadata: vi.fn(async (id: string) => metadata(id === candidate ? "canonical" : id)),
+    metadata: vi.fn(async (id: string) => ({ id, name: "Fixture", artists: [], album: "Fixture",
+      albumUri: "spotify:album:0000000000000000000001", spotifyUrl: "https://open.spotify.com/" })),
     play: vi.fn(async () => undefined), repeatState: vi.fn(async () => null),
     state: vi.fn(async (): Promise<PlaybackState | null> => state()),
     pause: vi.fn(), repeat: vi.fn(), transferPlayback: vi.fn(),
   };
-  return { api, adapter: new SpotifyPlaybackAdapter(api as unknown as SpotifyApi) };
+  return { api, adapter: new SpotifyPlaybackAdapter(api as unknown as SpotifyApi, () => time),
+    advance: (ms: number) => { time += ms; } };
 }
 
-it("confirms the owner's exact observed catalogue pair only after accepted start, and preserves the reported ID", async () => {
-  const { api, adapter } = fixture();
-  const reported = "0FjI1qnqhQbJNZn0zZRUZK";
-  api.metadata.mockImplementation(async (id) => metadata(id)); // Neither ID relinks.
+it.each([
+  ["57FP4k7tJYbUiYyhJUSGzA", "4VfkyTjwl5whB7xcl4jUnC"],
+  ["47X95Rup7LOEaVIHWlkRUT", "0FjI1qnqhQbJNZn0zZRUZK"],
+  ["unknown-request", "unknown-response"],
+])("trusts acknowledged start %s -> %s without catalogue equivalence or hardcoded IDs", async (requested, reported) => {
+  const { api, adapter, advance } = fixture();
   api.state.mockResolvedValue(state(reported));
-  expect(expectedMatches(await adapter.state(), candidate, "phone")).toBe(false);
-  await adapter.play(candidate, "phone");
+  expect(expectedMatches(await adapter.state(), requested, "phone")).toBe(false);
+  await adapter.play(requested, "phone");
+  expect(expectedMatches(await adapter.state(), requested, "phone")).toBe(false); // Settling delay.
+  advance(750);
   const actual = await adapter.state();
   expect(actual?.trackId).toBe(reported);
   expect(actual?.linkedFromTrackId).toBeUndefined();
-  expect(expectedMatches(actual, candidate, "phone")).toBe(true);
-  expect(api.metadata).toHaveBeenCalledTimes(1); // No missing metadata link is required.
-  api.state.mockResolvedValueOnce(state(reported, "another-phone"));
-  expect(expectedMatches(await adapter.state(), candidate, "phone")).toBe(false);
-  api.state.mockResolvedValueOnce(state("unlisted-same-name"));
-  expect(expectedMatches(await adapter.state(), candidate, "phone")).toBe(false);
-  await adapter.exit();
-  expect(expectedMatches(await adapter.state(), candidate, "phone")).toBe(false);
-});
-
-it("does not reverse the observed pair or retain it after a failed start or another candidate", async () => {
-  const { api, adapter } = fixture();
-  const reported = "0FjI1qnqhQbJNZn0zZRUZK";
-  api.metadata.mockImplementation(async (id) => metadata(id));
-  api.state.mockResolvedValue(state(reported));
-  await adapter.play(candidate, "phone");
-  expect(expectedMatches(await adapter.state(), candidate, "phone")).toBe(true);
-  api.play.mockRejectedValueOnce(new Error("start failed"));
-  await expect(adapter.play(candidate, "phone")).rejects.toThrow("start failed");
-  expect(expectedMatches(await adapter.state(), candidate, "phone")).toBe(false);
-  await adapter.play("another-candidate", "phone");
-  expect(expectedMatches(await adapter.state(), "another-candidate", "phone")).toBe(false);
-  await adapter.play(reported, "phone");
-  api.state.mockResolvedValue(state(candidate));
-  expect(expectedMatches(await adapter.state(), reported, "phone")).toBe(false);
-});
-
-it.each(["canonical", "linked-original"])("confirms missing player linked_from through authenticated %s proof, without player commands", async (proof) => {
-  const { api, adapter } = fixture();
-  await adapter.play(candidate, "phone");
-  api.metadata.mockResolvedValueOnce(proof === "canonical"
-    ? metadata("canonical") : { ...metadata("player-id"), linkedFromTrackId: candidate });
-  const actual = await adapter.state();
-  expect(actual?.linkedFromTrackId).toBeUndefined(); // Do not invent Spotify's field.
-  expect(expectedMatches(actual, candidate, "phone")).toBe(true);
-  expect(expectedMatches(await adapter.state(), candidate, "phone")).toBe(true);
-  expect(api.metadata).toHaveBeenCalledTimes(2); // Start + one alias read, then cache.
+  expect(expectedMatches(actual, requested, "phone")).toBe(true);
+  advance(60000); // Bound ID remains usable after the acquisition window.
+  api.state.mockResolvedValue(state(reported, "phone", false));
+  expect(expectedMatches(await adapter.state(), requested, "phone")).toBe(true);
+  expect(api.metadata).toHaveBeenCalledTimes(1); // Only pre-start album metadata.
   expect(api.play).toHaveBeenCalledTimes(1);
   expect(api.pause).not.toHaveBeenCalled();
-  expect(api.transferPlayback).not.toHaveBeenCalled();
 });
 
-it("rejects an unrelated ID with identical names, caches the rejection, and never accepts another device", async () => {
-  const { api, adapter } = fixture();
-  await adapter.play(candidate, "phone");
-  expect(expectedMatches(await adapter.state(), candidate, "phone")).toBe(false);
-  expect(expectedMatches(await adapter.state(), candidate, "phone")).toBe(false);
-  expect(api.metadata).toHaveBeenCalledTimes(2);
-  api.state.mockResolvedValueOnce(state("canonical", "other-phone"));
-  expect(expectedMatches(await adapter.state(), candidate, "phone")).toBe(false);
-  expect(api.metadata).toHaveBeenCalledTimes(2);
-  api.state.mockResolvedValueOnce(null);
-  expect(await adapter.state()).toBeNull();
-});
-
-it("does not confirm failed or explicitly unplayable metadata; failed reads can retry", async () => {
-  const { api, adapter } = fixture();
-  await adapter.play(candidate, "phone");
-  api.metadata.mockRejectedValueOnce(new Error("network"));
-  expect(expectedMatches(await adapter.state(), candidate, "phone")).toBe(false);
-  api.metadata.mockResolvedValueOnce({ ...metadata("canonical"), isPlayable: false });
-  expect(expectedMatches(await adapter.state(), candidate, "phone")).toBe(false);
-  expect(expectedMatches(await adapter.state(), candidate, "phone")).toBe(false);
-  expect(api.metadata).toHaveBeenCalledTimes(3);
-});
-
-it("coalesces concurrent alias reads and discards their proof when a new start fails", async () => {
-  const { api, adapter } = fixture();
-  await adapter.play(candidate, "phone");
-  let release!: (value: TrackMetadata) => void;
-  api.metadata.mockImplementationOnce(() => new Promise((resolve) => { release = resolve; }));
-  const reads = [adapter.state(), adapter.state()];
-  await vi.waitFor(() => expect(api.metadata).toHaveBeenCalledTimes(2));
-  api.metadata.mockRejectedValueOnce(new Error("next start lookup failed"));
-  await expect(adapter.play("next-candidate", "phone")).rejects.toThrow();
-  release(metadata("canonical"));
-  for (const result of await Promise.all(reads))
-    expect(expectedMatches(result, candidate, "phone")).toBe(false);
-  expect(expectedMatches(await adapter.state(), candidate, "phone")).toBe(false);
-});
-
-it("discards in-flight alias proof on exit and clears successful proof on the next start", async () => {
-  const { api, adapter } = fixture();
-  await adapter.play(candidate, "phone");
-  let release!: (value: TrackMetadata) => void;
-  api.metadata.mockImplementationOnce(() => new Promise((resolve) => { release = resolve; }));
-  const read = adapter.state();
-  await vi.waitFor(() => expect(api.metadata).toHaveBeenCalledTimes(2));
-  await adapter.exit();
-  release(metadata("canonical"));
-  expect(expectedMatches(await read, candidate, "phone")).toBe(false);
-  await adapter.play(candidate, "phone");
-  api.metadata.mockResolvedValueOnce(metadata("canonical"));
-  expect(expectedMatches(await adapter.state(), candidate, "phone")).toBe(true);
-  await adapter.play("next-candidate", "phone");
-  expect(expectedMatches(await adapter.state(), "next-candidate", "phone")).toBe(false);
-});
-
-it("does not apply a new start's proof to a playback read begun before that start", async () => {
-  const { api, adapter } = fixture();
-  await adapter.play(candidate, "phone");
-  let release!: (value: PlaybackState) => void;
-  api.state.mockImplementationOnce(() => new Promise((resolve) => { release = resolve; }));
-  const read = adapter.state();
-  await adapter.play("next-candidate", "phone");
-  release(state("next-candidate"));
-  expect((await read)?.resolvedFromTrackId).toBeUndefined();
-});
-
-it("bounds alias lookups to eight runtime entries per start", async () => {
-  const { api, adapter } = fixture();
-  await adapter.play(candidate, "phone");
-  for (let n = 0; n < 9; n++) {
-    api.state.mockResolvedValueOnce(state(`unrelated-${n}`));
-    expect(expectedMatches(await adapter.state(), candidate, "phone")).toBe(false);
+it("does not bind missing, paused or wrong-device playback, but can still observe playing within the window", async () => {
+  const { api, adapter, advance } = fixture();
+  await adapter.play("candidate", "phone"); advance(750);
+  for (const actual of [null, state("reported", "phone", false), state("reported", "other")]) {
+    api.state.mockResolvedValueOnce(actual);
+    expect(expectedMatches(await adapter.state(), "candidate", "phone")).toBe(false);
   }
-  api.state.mockResolvedValueOnce(state("unrelated-8"));
-  await adapter.state();
-  expect(api.metadata).toHaveBeenCalledTimes(10);
-  api.state.mockResolvedValueOnce(state("unrelated-0"));
-  await adapter.state();
-  expect(api.metadata).toHaveBeenCalledTimes(11); // Oldest entry was evicted.
+  expect(expectedMatches(await adapter.state(), "candidate", "phone")).toBe(true);
 });
 
-it("retains metadata linked_from separately from the canonical ID", async () => {
-  const storage = { getItem: (key: string) => key.endsWith("access-token") ? "fixture" : String(Date.now() + 60000), setItem: vi.fn(), removeItem: vi.fn() };
-  const fetcher = vi.fn(async () => new Response(JSON.stringify({
-    id: "canonical", name: "Fixture", linked_from: { id: candidate },
-  }), { status: 200 }));
-  const api = new SpotifyApi(new SpotifyTokenProvider(storage, fetcher), fetcher);
-  expect(await api.metadata("player-id")).toMatchObject({ id: "canonical", linkedFromTrackId: candidate });
-  expect(fetcher.mock.calls[0]).toBeDefined();
+it.each(["http", "network"] as const)("does not arm trust after %s start failure", async (kind) => {
+  const { api, adapter, advance } = fixture();
+  api.play.mockRejectedValueOnce(new SpotifyApiError(kind === "http" ? 403 : 0, "failed", undefined, kind));
+  await expect(adapter.play("candidate", "phone")).rejects.toThrow(); advance(750);
+  expect(expectedMatches(await adapter.state(), "candidate", "phone")).toBe(false);
+});
+
+it("expires pending trust and rejects a read that completes after the window", async () => {
+  const { api, adapter, advance } = fixture();
+  await adapter.play("candidate", "phone"); advance(750);
+  let release!: (s: PlaybackState) => void;
+  api.state.mockImplementationOnce(() => new Promise((resolve) => { release = resolve; }));
+  const pending = adapter.state(); advance(5000); release(state());
+  expect(expectedMatches(await pending, "candidate", "phone")).toBe(false);
+  expect(expectedMatches(await adapter.state(), "candidate", "phone")).toBe(false);
+});
+
+it("latches only one ID and rejects later unrelated tracks or devices", async () => {
+  const { api, adapter, advance } = fixture();
+  await adapter.play("candidate", "phone"); advance(750);
+  expect(expectedMatches(await adapter.state(), "candidate", "phone")).toBe(true);
+  api.state.mockResolvedValueOnce(state("later-track"));
+  expect(expectedMatches(await adapter.state(), "candidate", "phone")).toBe(false);
+  api.state.mockResolvedValueOnce(state("reported", "other-phone"));
+  expect(expectedMatches(await adapter.state(), "candidate", "phone")).toBe(false);
+});
+
+it("closes pending trust when exact identity already confirms the start", async () => {
+  const { api, adapter, advance } = fixture();
+  await adapter.play("candidate", "phone");
+  api.state.mockResolvedValueOnce(state("candidate"));
+  expect(expectedMatches(await adapter.state(), "candidate", "phone")).toBe(true);
+  advance(750);
+  expect(expectedMatches(await adapter.state(), "candidate", "phone")).toBe(false);
+});
+
+it("clears the association on new/failed starts and exit", async () => {
+  const { api, adapter, advance } = fixture();
+  await adapter.play("candidate", "phone"); advance(750);
+  expect(expectedMatches(await adapter.state(), "candidate", "phone")).toBe(true);
+  api.metadata.mockRejectedValueOnce(new Error("album read failed"));
+  await expect(adapter.play("next", "phone")).rejects.toThrow();
+  expect(expectedMatches(await adapter.state(), "candidate", "phone")).toBe(false);
+  await adapter.play("next", "phone"); advance(750);
+  expect(expectedMatches(await adapter.state(), "next", "phone")).toBe(true);
+  expect(expectedMatches(await adapter.state(), "candidate", "phone")).toBe(false);
+  await adapter.exit();
+  expect(expectedMatches(await adapter.state(), "next", "phone")).toBe(false);
+});
+
+it("does not annotate reads started before a new acknowledgement or before exit", async () => {
+  const { api, adapter, advance } = fixture();
+  for (const operation of ["first-start", "new-start", "exit"]) {
+    let release!: (s: PlaybackState) => void;
+    api.state.mockImplementationOnce(() => new Promise((resolve) => { release = resolve; }));
+    const pending = adapter.state();
+    if (operation === "exit") await adapter.exit();
+    else await adapter.play(operation, "phone");
+    advance(750); release(state());
+    expect((await pending)?.acceptedForTrackId).toBeUndefined();
+  }
+});
+
+it("does not arm trust while the play acknowledgement is still pending", async () => {
+  const { api, adapter, advance } = fixture();
+  let release!: () => void;
+  api.play.mockImplementationOnce(() => new Promise<undefined>((resolve) => { release = () => resolve(undefined); }));
+  const play = adapter.play("candidate", "phone");
+  await vi.waitFor(() => expect(api.play).toHaveBeenCalledOnce()); advance(750);
+  expect(expectedMatches(await adapter.state(), "candidate", "phone")).toBe(false);
+  release(); await play; advance(750);
+  expect(expectedMatches(await adapter.state(), "candidate", "phone")).toBe(true);
 });

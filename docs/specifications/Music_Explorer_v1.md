@@ -34,7 +34,7 @@ All these are **local input files**; none belong in the public deployment build.
 2. Require Spotify Premium for development-mode playback and select a supported Spotify Connect device (prefer Spotify Desktop, but allow another device). Request minimum scopes: `user-read-playback-state`, `user-modify-playback-state`; add `user-library-read` only if live library sync is implemented.
 3. Issue per-track playback to the selected Spotify client with the Spotify Web API rather than embedding a competing audio player or opening another browser tab.
 4. Set Spotify repeat mode to `track` while exploring. Save the previous repeat setting and try to restore it on session exit. Test that repeat-one works reliably on the selected device; if not, display a visible fallback, leaving the candidate pending and offering Replay.
-5. Serialize playback commands (Spotify does not guarantee ordering), reconcile reported playback state against the intended track and device, and handle missing/inactive/restricted devices, playback conflicts, `401`, `403`, `429`, network errors, and reauthentication. Honor `Retry-After`; do not busy-poll.
+5. Serialize playback commands (Spotify does not guarantee ordering), reconcile reported playback using accepted-command confirmation and the selected device, and handle missing/inactive/restricted devices, playback conflicts, `401`, `403`, `429`, network errors, and reauthentication. Honor `Retry-After`; do not busy-poll.
 6. Never accept a judgment while Spotify is confirmed to be playing a different track from the candidate. Pause and show `Resume candidate` on external playback changes; treat temporary no-state responses as uncertain, not as positive confirmation.
 7. A finished song does not create any judgment. The same candidate should loop until Fits, No, Skip, pause, or an explicit change of session.
 8. The app must show Spotify metadata and original, unaltered album artwork. Each cover/title has an available Spotify attribution/link; never crop, blur, overlay or distort artwork. Lazy-load metadata for tracks about to play and visible graph nodes; avoid mass-fetching 3,320 single-track lookups.
@@ -217,7 +217,7 @@ music-explorer/
 7. Selecting a graph node alone never interrupts Spotify. `Replay & explore from here` starts that reference at 0:00 and preserves all existing descendants.
 8. Node-local pending queues survive switching branches and app reload. Duplicate Spotify track IDs across branches do not collide.
 9. At least 20 sequential actions, branch switches, undo and save/reload produce the same recorded decisions and graph, without duplicate events.
-10. On expected/actual track mismatch, rating buttons are disabled until re-synchronization.
+10. After a successful Spotify start, trust the first playing report on the selected device within the bounded observation window, even if its ID differs, per [accepted-command confirmation](../decisions/003-spotify-album-context.md). Keep that runtime ID association for controls and ratings; save judgments against the requested candidate. Missing/paused startup playback, wrong devices, failed requests, or later unrelated track changes still block confirmation. No per-track hardcoding or manual confirmation is required.
 11. On file-write failure, the app indicates unsaved state and does not silently advance to a different candidate; backup/export is available.
 12. Public Pages deployment never includes personal CSV/JSON, cover-image binaries, access tokens or refresh tokens.
 
