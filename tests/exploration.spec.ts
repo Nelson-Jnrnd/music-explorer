@@ -8,20 +8,20 @@ const csv =
     (_, n) =>
       `spotify:track:${id(n + 1)},Song ${n + 1},Artist ${n + 1},Album ${n + 1},2024-02-01`,
   ).join("\n");
-async function importLibrary(page: import("@playwright/test").Page) {
+async function importLibrary(page: import("@playwright/test").Page, csvContents = csv, trackCount = 45) {
   await page.goto("./?simulate=1");
   await page.getByRole("button", { name: "Import your Spotify CSV" }).click();
   await page.getByLabel("Spotify-compatible CSV").setInputFiles({
     name: "synthetic.csv",
     mimeType: "text/csv",
-    buffer: Buffer.from(csv),
+    buffer: Buffer.from(csvContents),
   });
   await page
     .getByRole("button", { name: "Preview import", exact: true })
     .click();
   await expect(page.getByText("eligible unique tracks")).toBeVisible();
   await page
-    .getByRole("button", { name: "Import 45 tracks", exact: true })
+    .getByRole("button", { name: `Import ${trackCount} tracks`, exact: true })
     .click();
   await expect(
     page.getByRole("button", {
@@ -676,4 +676,66 @@ test("player aliases without linked_from confirm through metadata and retain pla
   await expect(page.getByRole("alert")).toContainText("Candidate playback is not confirmed");
   expect(pauses).toBe(pausesBeforeMismatch + 1); // Confirmed mismatches keep the existing pause guard.
   expect(await page.evaluate(() => JSON.parse(localStorage.getItem("music-explorer-recovery-v1")!).evaluations.length)).toBe(0);
+});
+
+test("owner-observed catalogue pair unlocks rating without metadata relinking", async ({ page }) => {
+  const requested = "47X95Rup7LOEaVIHWlkRUT";
+  const reported = "0FjI1qnqhQbJNZn0zZRUZK";
+  await importLibrary(page, "Track URI,Track Name,Artist Name(s),Album Name,Added At\n" +
+    `spotify:track:${id(1)},Song 1,Artist 1,Fixture,2024-02-01\n` +
+    `spotify:track:${requested},She's A Big Boy,Mcbaise,Fixture,2024-02-01`, 2);
+  await page.addInitScript(() => {
+    sessionStorage.setItem("music-explorer.spotify.access-token", "test-access");
+    sessionStorage.setItem("music-explorer.spotify.refresh-token", "test-refresh");
+    sessionStorage.setItem("music-explorer.spotify.expires-at", String(Date.now() + 3600000));
+    sessionStorage.setItem("music-explorer.spotify.client-id", "test-client");
+  });
+  let playingId = id(1);
+  let isPlaying = true;
+  let playStarts = 0;
+  await page.route("https://api.spotify.com/v1/**", async (route) => {
+    const req = route.request();
+    const url = new URL(req.url());
+    if (url.pathname.endsWith("/devices")) return route.fulfill({ json: { devices: [{ id: "phone", name: "My phone", is_active: true }] } });
+    if (url.pathname.includes("/tracks/")) return route.fulfill({ json: {
+      id: url.pathname.split("/").at(-1), name: "Fixture metadata without relinking",
+      artists: [], album: { name: "Synthetic album", uri: "spotify:album:0000000000000000000001" },
+    } });
+    if (req.method() === "GET" && url.pathname.endsWith("/player"))
+      return route.fulfill({ json: { device: { id: "phone" }, item: { id: playingId, duration_ms: 180000 }, is_playing: isPlaying, progress_ms: 0, repeat_state: "track" } });
+    if (req.method() === "PUT" && url.pathname.endsWith("/pause")) isPlaying = false;
+    if (req.method() === "PUT" && url.pathname.endsWith("/play")) {
+      isPlaying = true;
+      if (req.postData()) {
+        playStarts++;
+        const wanted = req.postDataJSON().offset.uri.split(":").at(-1);
+        playingId = wanted === requested ? reported : wanted;
+      }
+    }
+    return route.fulfill({ status: 204 });
+  });
+  await page.goto("./");
+  await page.getByRole("button", { name: "Start exploration from Song 1 Artist 1", exact: true }).click();
+  await page.getByRole("button", { name: "Next suggestion" }).click();
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("She's A Big Boy");
+  await expect(page.getByRole("button", { name: "Fits 3", exact: true })).toBeEnabled();
+  await page.getByRole("button", { name: "Replay", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Pause", exact: true })).toBeEnabled();
+  expect(playStarts).toBe(3);
+  await page.getByRole("button", { name: "Pause", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Resume", exact: true })).toBeEnabled();
+  await page.getByRole("button", { name: "Resume", exact: true }).click();
+  await page.getByRole("button", { name: "Check playback", exact: true }).click();
+  const diagnostic = page.getByRole("status").filter({ hasText: "Spotify reports playback playing" });
+  await expect(diagnostic).toContainText("Track matches candidate: yes");
+  await expect(diagnostic).toContainText(`Candidate track ID: ${requested}. Spotify-reported track ID: ${reported}.`);
+  await page.screenshot({ path: "test-results/observed-pair-desktop.png", fullPage: true });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.screenshot({ path: "test-results/observed-pair-mobile.png", fullPage: true });
+  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
+  await page.getByRole("heading", { level: 1 }).click();
+  await page.keyboard.press("3");
+  await expect(page.getByText("1 decisions ·", { exact: false })).toBeVisible();
+  const saved = await page.evaluate(() => JSON.parse(localStorage.getItem("music-explorer-recovery-v1")!));
+  expect(saved.evaluations[0].candidateSpotifyTrackId).toBe(requested);
 });
